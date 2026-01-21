@@ -24,6 +24,7 @@ export default function Navbar() {
         <>
           <Link to="/profile">Profile</Link>
           <Link to="/history">History</Link>
+          <Link to="/chat">Chat</Link>
 
 
           <span style={{ marginLeft: 8 }}>

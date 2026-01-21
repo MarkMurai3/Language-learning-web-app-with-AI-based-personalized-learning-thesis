@@ -7,7 +7,9 @@ const interestsRoutes = require("./routes/interests.routes");
 const profileRoutes = require("./routes/profile.routes");
 const feedbackRoutes = require("./routes/feedback.routes");
 const historyRoutes = require("./routes/history.routes");
-
+const chatRoutes = require("./routes/chat.routes");
+const ttsRoutes = require("./routes/tts.routes");
+const sttRoutes = require("./routes/stt.routes");
 
 const app = express();
 
@@ -22,7 +24,9 @@ app.use("/api/interests", interestsRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/history", historyRoutes);
-
+app.use("/api/chat", chatRoutes);
+app.use("/api/tts", ttsRoutes);
+app.use("/api/stt", sttRoutes);
 
 // Temporary test route
 app.get("/api/health", (req, res) => {

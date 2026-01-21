@@ -114,3 +114,58 @@ export async function getHistory(limit = 20) {
 export async function clearHistory() {
   return request("/history", { method: "DELETE" });
 }
+
+export async function sendChat(provider, messages) {
+  return request("/chat", {
+    method: "POST",
+    body: JSON.stringify({ provider, messages }),
+  });
+}
+
+export async function tts(text, voice) {
+  const token = getToken();
+
+  const res = await fetch("http://localhost:5000/api/tts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ text, voice }),
+  });
+
+  if (!res.ok) {
+    let msg = "TTS failed";
+    try {
+      const data = await res.json();
+      msg = data?.error || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  return res.blob(); // audio/mpeg
+}
+
+export async function stt(audioBlob) {
+  const token = getToken();
+
+  const form = new FormData();
+  form.append("audio", audioBlob, "speech.webm");
+
+  const res = await fetch("http://localhost:5000/api/stt", {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // IMPORTANT: do NOT set Content-Type manually for FormData
+    },
+    body: form,
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.error || "STT failed");
+  }
+
+  return data; // { text }
+}
