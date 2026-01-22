@@ -169,3 +169,22 @@ export async function stt(audioBlob) {
 
   return data; // { text }
 }
+
+
+export async function sttLocal(audioBlob) {
+  const token = getToken();
+  const form = new FormData();
+  form.append("audio", audioBlob, "speech.webm");
+
+  const res = await fetch("http://localhost:5000/api/stt/local", {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "Local STT failed");
+  return data; // { text }
+}

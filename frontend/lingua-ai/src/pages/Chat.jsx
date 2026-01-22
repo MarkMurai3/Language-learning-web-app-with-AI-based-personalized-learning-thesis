@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendChat, tts, stt } from "../services/api";
+import { sendChat, tts, stt, sttLocal } from "../services/api";
 import { isLoggedIn, clearAuth } from "../services/authStorage";
+
 
 
 const SYSTEM_PROMPT =
@@ -24,6 +25,8 @@ export default function Chat() {
   const [voice, setVoice] = useState("coral"); // matches backend default
   const [recording, setRecording] = useState(false);
   const [sttLoading, setSttLoading] = useState(false);
+  const [sttProvider, setSttProvider] = useState("openai"); // "openai" | "local"
+
 
   // let mediaRecorderRef = null;
   // let chunksRef = [];
@@ -129,6 +132,7 @@ async function startRecording() {
         const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
 
         const data = await stt(audioBlob);
+        // const data = sttProvider === "local" ? await sttLocal(audioBlob) : await stt(audioBlob);
         const text = (data.text || "").trim();
 
         if (text) {
@@ -211,6 +215,13 @@ function stopRecording() {
           {speaking ? "Speaking..." : "Speak last reply"}
         </button>
 
+        <label>
+          STT Provider{" "}
+          <select value={sttProvider} onChange={(e) => setSttProvider(e.target.value)}>
+            <option value="openai">OpenAI (cloud)</option>
+            <option value="local">Whisper (local)</option>
+          </select>
+        </label>
 
         <button type="button" onClick={handleReset}>
           Reset chat
