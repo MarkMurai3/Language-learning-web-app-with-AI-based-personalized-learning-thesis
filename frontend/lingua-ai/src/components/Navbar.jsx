@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { clearAuth, getUser, isLoggedIn } from "../services/authStorage";
 
-export default function Navbar() {
+export default function Navbar({ onToggleNotes }) {
   const navigate = useNavigate();
   const loggedIn = isLoggedIn();
   const user = getUser();
@@ -26,6 +26,9 @@ export default function Navbar() {
           <Link to="/history">History</Link>
           <Link to="/chat">Chat</Link>
 
+          <button type="button" onClick={onToggleNotes}>
+            Notes
+          </button>
 
           <span style={{ marginLeft: 8 }}>
             Logged in as <b>{user?.email}</b>
