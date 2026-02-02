@@ -188,3 +188,8 @@ export async function sttLocal(audioBlob) {
   if (!res.ok) throw new Error(data?.error || "Local STT failed");
   return data; // { text }
 }
+
+
+export async function searchVideos(q) {
+  return request(`/search?q=${encodeURIComponent(q)}`);
+}

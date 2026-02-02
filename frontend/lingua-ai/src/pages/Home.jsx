@@ -9,6 +9,7 @@ import {
   likeVideo,
   dislikeVideo,
   addToHistory,
+  searchVideos,
 } from "../services/api";
 
 import { isLoggedIn, clearAuth } from "../services/authStorage";
@@ -19,9 +20,18 @@ export default function Home() {
 
   const [status, setStatus] = useState("Loading...");
   const [me, setMe] = useState(null);
+
   const [items, setItems] = useState([]);
   const [recError, setRecError] = useState("");
+
   const [playingId, setPlayingId] = useState(null);
+
+  // 🔎 Search state
+  const [searchText, setSearchText] = useState("");
+  const [searchInfo, setSearchInfo] = useState(null); // { query, translated }
+  const [searchResults, setSearchResults] = useState(null); // null = not searching
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
     // 1) must be logged in
@@ -55,9 +65,6 @@ export default function Home() {
       .then((data) => setStatus(data.message))
       .catch(() => setStatus("Backend connection failed"));
 
-
-
-
     // 5) recommendations
     getRecommendations()
       .then((data) => {
@@ -67,23 +74,18 @@ export default function Home() {
           Array.isArray(data?.items?.items) ? data.items.items :
           Array.isArray(data?.results) ? data.results :
           Array.isArray(data?.data) ? data.data :
+          // if backend returns { items: {} } keyed by id:
+          (data?.items && typeof data.items === "object") ? Object.values(data.items) :
           [];
 
         setItems(maybe);
-
-        // Helpful debug: you will see the real shape in the console
-        console.log("getRecommendations raw response:", data);
-        console.log("normalized items array length:", maybe.length);
       })
       .catch((err) =>
         setRecError(err?.message || "Failed to load recommendations")
       );
-
-      
   }, [navigate]);
 
   async function saveHistory(v) {
-    // helper to keep your onPlay/onOpen clean
     try {
       await addToHistory({
         id: v.id,
@@ -93,10 +95,40 @@ export default function Home() {
         language: v.language,
       });
     } catch (e) {
-      // don't block UX if history fails
       console.warn("Failed to add to history:", e);
     }
   }
+
+  async function handleSearchSubmit(e) {
+    e.preventDefault();
+    const q = searchText.trim();
+    if (!q) return;
+
+    setSearchLoading(true);
+    setSearchError("");
+    setSearchInfo(null);
+
+    try {
+      const data = await searchVideos(q);
+      setSearchInfo({ query: data.query, translated: data.translated });
+      setSearchResults(data.items || []);
+    } catch (e2) {
+      setSearchError(e2.message || "Search failed");
+      setSearchResults([]); // show empty state if it fails
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  function clearSearch() {
+    setSearchResults(null);
+    setSearchInfo(null);
+    setSearchError("");
+    setSearchText("");
+  }
+
+  // ✅ Choose which list to show
+  const listToShow = searchResults !== null ? searchResults : items;
 
   return (
     <div>
@@ -111,7 +143,37 @@ export default function Home() {
         <p>Verifying login...</p>
       )}
 
-      {/* ✅ NOW PLAYING SECTION (PUTS PLAYER ABOVE RECOMMENDATIONS) */}
+      {/* 🔎 SEARCH UI (put under verification) */}
+      <form
+        onSubmit={handleSearchSubmit}
+        style={{ display: "flex", gap: 10, maxWidth: 700, margin: "12px 0" }}
+      >
+        <input
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder="Search anything… (any language)"
+          style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444" }}
+        />
+        <button type="submit" disabled={searchLoading || !searchText.trim()}>
+          {searchLoading ? "Searching..." : "Search"}
+        </button>
+
+        {searchResults !== null && (
+          <button type="button" onClick={clearSearch}>
+            Clear
+          </button>
+        )}
+      </form>
+
+      {searchError && <p style={{ color: "crimson" }}>{searchError}</p>}
+
+      {searchInfo && (
+        <p style={{ opacity: 0.8 }}>
+          Translated: <b>{searchInfo.translated}</b>
+        </p>
+      )}
+
+      {/* ✅ NOW PLAYING */}
       {playingId && (
         <div style={{ marginBottom: 16 }}>
           <h2>Now playing</h2>
@@ -140,43 +202,47 @@ export default function Home() {
         </div>
       )}
 
-      <h2>Recommendations</h2>
-      {recError && <p style={{ color: "crimson" }}>{recError}</p>}
+      {/* Title changes depending on mode */}
+      <h2>{searchResults !== null ? "Search results" : "Recommendations"}</h2>
 
-        <div style={{ display: "grid", gap: 12, maxWidth: 700 }}>
-          {!Array.isArray(items) ? (
-            <p style={{ color: "crimson" }}>
-              items is not an array (type: {typeof items})
-            </p>
-          ) : items.length === 0 ? (
-            <p>No recommendations yet.</p>
-          ) : (
-            items.map((v, idx) => (
-              <VideoCard
-                key={v?.id ?? idx}
-                title={v?.title ?? "(no title)"}
-                channel={v?.channel ?? "(no channel)"}
-                url={v?.url ?? ""}
-                reason={v?.reason ?? ""}
+      {/* Show recommendation error only when not searching */}
+      {searchResults === null && recError && (
+        <p style={{ color: "crimson" }}>{recError}</p>
+      )}
 
-                onPlay={async () => {
-                  await saveHistory(v);
-                  if (v?.id) setPlayingId(v.id);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
+      <div style={{ display: "grid", gap: 12, maxWidth: 700 }}>
+        {listToShow.length === 0 ? (
+          <p>
+            {searchResults !== null
+              ? "No search results."
+              : "No recommendations yet."}
+          </p>
+        ) : (
+          listToShow.map((v, idx) => (
+            <VideoCard
+              key={v?.id ?? idx}
+              title={v?.title ?? "(no title)"}
+              channel={v?.channel ?? "(no channel)"}
+              url={v?.url ?? ""}
+              reason={v?.reason ?? ""}
 
-                onOpen={async () => {
-                  await saveHistory(v);
-                  if (v?.url) window.open(v.url, "_blank", "noreferrer");
-                }}
+              onPlay={async () => {
+                await saveHistory(v);
+                if (v?.id) setPlayingId(v.id);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
 
-                onLike={() => v?.id && likeVideo(v.id)}
-                onDislike={() => v?.id && dislikeVideo(v.id)}
-              />
-            ))
-          )}
-        </div>
+              onOpen={async () => {
+                await saveHistory(v);
+                if (v?.url) window.open(v.url, "_blank", "noreferrer");
+              }}
 
+              onLike={() => v?.id && likeVideo(v.id)}
+              onDislike={() => v?.id && dislikeVideo(v.id)}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }
