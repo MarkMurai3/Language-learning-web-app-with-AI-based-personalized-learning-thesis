@@ -9,6 +9,8 @@ import Profile from "./pages/Profile";
 import History from "./pages/History";
 import Chat from "./pages/Chat";
 import NotesWidget from "./components/NotesWidget";
+import Admin from "./pages/Admin";
+
 
 export default function App() {
   const [notesOpen, setNotesOpen] = useState(false);
@@ -28,6 +30,8 @@ export default function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/history" element={<History />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/admin" element={<Admin />} />
+
         </Routes>
       </div>
 

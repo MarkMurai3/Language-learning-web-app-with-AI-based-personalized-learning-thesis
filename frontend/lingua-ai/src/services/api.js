@@ -41,10 +41,10 @@ export async function getHealthStatus() {
   return request("/health");
 }
 
-export async function register(email, password, username, nativeLanguage, targetLanguage, targetLevel) {
+export async function register(email, password, targetLanguage) {
   return request("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, username, nativeLanguage, targetLanguage, targetLevel }),
+    body: JSON.stringify({ email, password, targetLanguage }),
   });
 }
 
@@ -192,4 +192,60 @@ export async function sttLocal(audioBlob) {
 
 export async function searchVideos(q) {
   return request(`/search?q=${encodeURIComponent(q)}`);
+}
+
+export async function adminGetUsers() {
+  return request("/admin/users");
+}
+
+// export async function adminSetUserDisabled(id, disabled) {
+//   return request(`/admin/users/${id}`, {
+//     method: "PATCH",
+//     body: { disabled },
+//   });
+// }
+
+export async function adminSetUserDisabled(id, disabled) {
+  return request(`/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ disabled }),
+  });
+}
+
+
+export async function adminGetBlockedVideos() {
+  return request("/admin/blocked-videos");
+}
+
+export async function adminAddBlockedVideo(videoId, reason) {
+  return request("/admin/blocked-videos", {
+    method: "POST",
+    body: JSON.stringify({ videoId, reason }),
+  });
+}
+
+
+export async function adminDeleteBlockedVideo(videoId) {
+  return request(`/admin/blocked-videos/${encodeURIComponent(videoId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function adminGetSeedChannels() {
+  return request("/admin/seed-channels");
+}
+
+export async function adminAddSeedChannel(language, channelId, label) {
+  return request("/admin/seed-channels", {
+    method: "POST",
+    body: JSON.stringify({ language, channelId, label }),
+  });
+}
+
+
+export async function adminDeleteSeedChannel(language, channelId) {
+  return request(
+    `/admin/seed-channels/${encodeURIComponent(language)}/${encodeURIComponent(channelId)}`,
+    { method: "DELETE" }
+  );
 }

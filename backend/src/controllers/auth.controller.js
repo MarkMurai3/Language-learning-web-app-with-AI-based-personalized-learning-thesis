@@ -11,25 +11,26 @@ function requireFields(body, fields) {
 async function register(req, res) {
   try {
     // Required fields for registration
-    const missing = requireFields(req.body, ["email", "password", "username", "nativeLanguage", "targetLanguage", "targetLevel"]);
+    const missing = requireFields(req.body, ["email", "password", "targetLanguage"]);
     if (missing) return res.status(400).json({ error: `Missing field: ${missing}` });
 
-    const { email, password, username, nativeLanguage, targetLanguage, targetLevel } = req.body;
+    const { email, password, targetLanguage } = req.body;
 
     const user = await registerUser({
       email,
       password,
-      username,
-      nativeLanguage,
+      // username,
+      // nativeLanguage,
       targetLanguage,
-      targetLevel,
+      // targetLevel,
     });
 
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
 
     return res.status(201).json({ user, token });
   } catch (err) {
@@ -51,10 +52,11 @@ async function login(req, res) {
     if (!user) return res.status(401).json({ error: "Invalid email or password" });
 
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
 
     return res.json({ user, token });
   } catch {

@@ -9,10 +9,10 @@ const LEVEL_OPTIONS = ["A1", "A2", "B1", "B2", "C1", "C2"];
 export default function Profile() {
   const navigate = useNavigate();
 
-  const [username, setUsernameState] = useState("");
-  const [nativeLanguage, setNativeLanguage] = useState("Hungarian");
+  // const [username, setUsernameState] = useState("");
+  // const [nativeLanguage, setNativeLanguage] = useState("Hungarian");
   const [targetLanguage, setTargetLanguage] = useState("English");
-  const [targetLevel, setTargetLevel] = useState("A2");
+  // const [targetLevel, setTargetLevel] = useState("A2");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,10 +33,10 @@ export default function Profile() {
         const data = await getProfile();
         const u = data.user;
 
-        setUsernameState(u.username || "");
-        setNativeLanguage(u.nativeLanguage || "Hungarian");
+        // setUsernameState(u.username || "");
+        // setNativeLanguage(u.nativeLanguage || "Hungarian");
         setTargetLanguage(u.targetLanguage || "English");
-        setTargetLevel(u.targetLevel || "A2");
+        // setTargetLevel(u.targetLevel || "A2");
       } catch (e) {
         clearAuth();
         navigate("/login");
@@ -56,10 +56,10 @@ export default function Profile() {
 
     try {
       const data = await updateProfile({
-        username,
-        nativeLanguage,
+        // username,
+        // nativeLanguage,
         targetLanguage,
-        targetLevel,
+        // targetLevel,
       });
 
       // Update localStorage user so Navbar updates immediately
@@ -79,12 +79,12 @@ export default function Profile() {
       <h1>Profile</h1>
 
       <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 360 }}>
-        <label>
+        {/* <label>
           Username
           <input value={username} onChange={(e) => setUsernameState(e.target.value)} />
-        </label>
+        </label> */}
 
-        <label>
+        {/* <label>
           Native language
           <select value={nativeLanguage} onChange={(e) => setNativeLanguage(e.target.value)}>
             {LANGUAGE_OPTIONS.map((l) => (
@@ -93,7 +93,7 @@ export default function Profile() {
               </option>
             ))}
           </select>
-        </label>
+        </label> */}
 
         <label>
           Target language
@@ -106,7 +106,7 @@ export default function Profile() {
           </select>
         </label>
 
-        <label>
+        {/* <label>
           Target level
           <select value={targetLevel} onChange={(e) => setTargetLevel(e.target.value)}>
             {LEVEL_OPTIONS.map((lvl) => (
@@ -115,7 +115,7 @@ export default function Profile() {
               </option>
             ))}
           </select>
-        </label>
+        </label> */}
 
         <button disabled={saving} type="submit">
           {saving ? "Saving..." : "Save profile"}

@@ -1,3 +1,264 @@
+// const franc = require("franc");
+// const { getHints } = require("./langHints");
+
+// const { getInterestsForUser } = require("./interests.service");
+// const { getUserById } = require("./auth.service");
+// const { ytSearch, ytVideosDetails } = require("./youtube.service");
+// const { getLangCodes } = require("./languageMap");
+
+// // ✅ admin rules
+// const { isBlocked, getSeedChannelsForLanguage } = require("./admin.service");
+
+// // OPTIONAL: feedback (dislikes)
+// let getFeedback;
+// try {
+//   ({ getFeedback } = require("./feedback.service"));
+// } catch {
+//   getFeedback = null;
+// }
+
+// /* ================= helpers ================= */
+
+// function normalizeLangPrefix(s) {
+//   return (s || "").toLowerCase().split("-")[0];
+// }
+
+// function detectTextLanguageISO3(text) {
+//   const t = (text || "").replace(/\s+/g, " ").trim();
+//   if (t.length < 20) return "und";
+//   return franc(t, { minLength: 20 });
+// }
+
+// function passesLanguageFilter({ targetYt, targetFranc, videoSnippet }) {
+//   const title = videoSnippet?.title || "";
+//   const description = videoSnippet?.description || "";
+
+//   const audioLang = normalizeLangPrefix(videoSnippet?.defaultAudioLanguage);
+//   const textLang = normalizeLangPrefix(videoSnippet?.defaultLanguage);
+
+//   if (audioLang) return audioLang === targetYt;
+//   if (textLang) return textLang === targetYt;
+
+//   const detected = detectTextLanguageISO3(`${title}\n${description}`);
+//   if (detected === "und") return true;
+//   return detected === targetFranc;
+// }
+
+// function containsAny(text, words) {
+//   const t = (text || "").toLowerCase();
+//   return (words || []).some((w) => t.includes(String(w).toLowerCase()));
+// }
+
+// function makeQueries(interests, targetLanguageName) {
+//   const hints = getHints(targetLanguageName);
+
+//   const nativeQueries = [];
+//   const learningQueries = [];
+
+//   for (const interest of interests.slice(0, 4)) {
+//     const translated = hints.interestMap?.[interest];
+//     const keywords =
+//       Array.isArray(translated) && translated.length ? translated : [interest];
+
+//     for (const kw of keywords) nativeQueries.push(String(kw));
+
+//     learningQueries.push(`${interest} ${targetLanguageName}`);
+//     learningQueries.push(`${interest} in ${targetLanguageName}`);
+//   }
+
+//   return { nativeQueries, learningQueries, hints };
+// }
+
+// async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet }) {
+//   const ids = [];
+
+//   for (const q of queries) {
+//     const items = await ytSearch({
+//       apiKey,
+//       q,
+//       relevanceLanguage: targetYt,
+//       maxResults: 12,
+//     });
+
+//     for (const it of items) {
+//       const id = it?.id?.videoId;
+//       if (!id) continue;
+
+//       const sid = String(id);
+//       if (dislikedSet.has(sid)) continue;
+//       if (isBlocked(sid)) continue;
+
+//       ids.push(id);
+//     }
+//   }
+
+//   return ids;
+// }
+
+// async function collectIdsFromSeedChannels({
+//   apiKey,
+//   seeds,
+//   q,
+//   targetYt,
+//   dislikedSet,
+// }) {
+//   const ids = [];
+
+//   for (const s of (seeds || []).slice(0, 5)) {
+//     const items = await ytSearch({
+//       apiKey,
+//       q: q || "",
+//       relevanceLanguage: targetYt,
+//       maxResults: 5,
+//       channelId: s.channelId,
+//     });
+
+//     for (const it of items) {
+//       const id = it?.id?.videoId;
+//       if (!id) continue;
+
+//       const sid = String(id);
+//       if (dislikedSet.has(sid)) continue;
+//       if (isBlocked(sid)) continue;
+
+//       ids.push(id);
+//     }
+//   }
+
+//   return ids;
+// }
+
+// /* ================= main ================= */
+
+// async function buildRecommendations(jwtUser) {
+//   const apiKey = process.env.YOUTUBE_API_KEY;
+//   if (!apiKey) throw new Error("Missing YOUTUBE_API_KEY");
+
+//   const interests = getInterestsForUser(jwtUser.userId);
+//   const profile = getUserById(jwtUser.userId);
+
+//   const targetLanguage = profile?.targetLanguage || "English";
+//   const { yt: targetYt, franc: targetFranc } = getLangCodes(targetLanguage);
+
+//   if (!interests.length) return [];
+
+//   // disliked videos
+//   let dislikedSet = new Set();
+//   if (getFeedback) {
+//     try {
+//       const fb = getFeedback(jwtUser.userId);
+//       dislikedSet = new Set((fb?.disliked || []).map(String));
+//     } catch {}
+//   }
+
+//   // queries
+//   const { nativeQueries, learningQueries, hints } = makeQueries(
+//     interests,
+//     targetLanguage
+//   );
+
+//   // seed lane
+//   const seeds = getSeedChannelsForLanguage(targetLanguage);
+//   const seedIds = await collectIdsFromSeedChannels({
+//     apiKey,
+//     seeds,
+//     q: interests[0] || "",
+//     targetYt,
+//     dislikedSet,
+//   });
+
+//   // native + learning lanes
+//   const nativeIds = await collectIdsFromQueries({
+//     apiKey,
+//     queries: nativeQueries,
+//     targetYt,
+//     dislikedSet,
+//   });
+
+//   const learningIds = await collectIdsFromQueries({
+//     apiKey,
+//     queries: learningQueries,
+//     targetYt,
+//     dislikedSet,
+//   });
+
+//   // merge (seed > native > learning)
+//   const uniqueIds = [];
+//   const seen = new Set();
+
+//   for (const id of seedIds) {
+//     if (seen.has(id)) continue;
+//     seen.add(id);
+//     uniqueIds.push(id);
+//     if (uniqueIds.length >= 15) break;
+//   }
+
+//   for (const id of nativeIds) {
+//     if (seen.has(id)) continue;
+//     seen.add(id);
+//     uniqueIds.push(id);
+//     if (uniqueIds.length >= 35) break;
+//   }
+
+//   for (const id of learningIds) {
+//     if (seen.has(id)) continue;
+//     seen.add(id);
+//     uniqueIds.push(id);
+//     if (uniqueIds.length >= 50) break;
+//   }
+
+//   if (!uniqueIds.length) return [];
+
+//   // fetch details
+//   const details = await ytVideosDetails({ apiKey, ids: uniqueIds });
+
+//   // filter + score
+//   const out = [];
+//   for (const v of details) {
+//     const sn = v?.snippet;
+//     if (!sn) continue;
+
+//     if (dislikedSet.has(String(v.id))) continue;
+//     if (isBlocked(String(v.id))) continue;
+
+//     const okLang = passesLanguageFilter({
+//       targetYt,
+//       targetFranc,
+//       videoSnippet: sn,
+//     });
+//     if (!okLang) continue;
+
+//     const title = sn.title || "";
+//     const description = sn.description || "";
+
+//     const isLearning = containsAny(
+//       `${title}\n${description}`,
+//       hints.learnStop
+//     );
+
+//     const score = isLearning ? 0 : 10;
+
+//     out.push({
+//       id: v.id,
+//       title,
+//       channel: sn.channelTitle || "",
+//       url: `https://www.youtube.com/watch?v=${v.id}`,
+//       thumbnail:
+//         sn.thumbnails?.medium?.url || sn.thumbnails?.high?.url || "",
+//       language: targetLanguage,
+//       reason: isLearning ? "Learning-friendly" : "Native content",
+//       _score: score,
+//     });
+//   }
+
+//   out.sort((a, b) => (b._score || 0) - (a._score || 0));
+//   return out.slice(0, 20).map(({ _score, ...rest }) => rest);
+// }
+
+// module.exports = { buildRecommendations };
+
+
+
 const franc = require("franc");
 const { getHints } = require("./langHints");
 
@@ -6,7 +267,10 @@ const { getUserById } = require("./auth.service");
 const { ytSearch, ytVideosDetails } = require("./youtube.service");
 const { getLangCodes } = require("./languageMap");
 
-// OPTIONAL: only keep this if you actually have feedback.service.js
+// ✅ admin rules
+const { isBlocked, getSeedChannelsForLanguage } = require("./admin.service");
+
+// OPTIONAL: feedback (dislikes)
 let getFeedback;
 try {
   ({ getFeedback } = require("./feedback.service"));
@@ -14,31 +278,30 @@ try {
   getFeedback = null;
 }
 
-/** helpers **/
+/* ================= helpers ================= */
+
 function normalizeLangPrefix(s) {
-  return (s || "").toLowerCase().split("-")[0]; // "es-419" -> "es"
+  return (s || "").toLowerCase().split("-")[0];
 }
 
 function detectTextLanguageISO3(text) {
   const t = (text || "").replace(/\s+/g, " ").trim();
   if (t.length < 20) return "und";
-  return franc(t, { minLength: 20 }); // iso-639-3 or "und"
+  return franc(t, { minLength: 20 });
 }
 
 function passesLanguageFilter({ targetYt, targetFranc, videoSnippet }) {
   const title = videoSnippet?.title || "";
   const description = videoSnippet?.description || "";
 
-  // Best: YouTube metadata
   const audioLang = normalizeLangPrefix(videoSnippet?.defaultAudioLanguage);
   const textLang = normalizeLangPrefix(videoSnippet?.defaultLanguage);
 
   if (audioLang) return audioLang === targetYt;
   if (textLang) return textLang === targetYt;
 
-  // Fallback: detect from title+description
   const detected = detectTextLanguageISO3(`${title}\n${description}`);
-  if (detected === "und") return true; // unknown => allow (non-strict)
+  if (detected === "und") return true;
   return detected === targetFranc;
 }
 
@@ -55,14 +318,11 @@ function makeQueries(interests, targetLanguageName) {
 
   for (const interest of interests.slice(0, 4)) {
     const translated = hints.interestMap?.[interest];
-
-    // Lane A: native / mainstream query (no “Spanish” etc)
     const keywords =
       Array.isArray(translated) && translated.length ? translated : [interest];
 
     for (const kw of keywords) nativeQueries.push(String(kw));
 
-    // Lane B: learning-friendly queries
     learningQueries.push(`${interest} ${targetLanguageName}`);
     learningQueries.push(`${interest} in ${targetLanguageName}`);
   }
@@ -83,14 +343,54 @@ async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet })
 
     for (const it of items) {
       const id = it?.id?.videoId;
-      if (id && !dislikedSet.has(String(id))) ids.push(id);
+      if (!id) continue;
+
+      const sid = String(id);
+      if (dislikedSet.has(sid)) continue;
+      if (isBlocked(sid)) continue;
+
+      ids.push(id);
     }
   }
 
   return ids;
 }
 
-/** main **/
+async function collectIdsFromSeedChannels({
+  apiKey,
+  seeds,
+  q,
+  targetYt,
+  dislikedSet,
+}) {
+  const ids = [];
+
+  for (const s of (seeds || []).slice(0, 5)) {
+    const items = await ytSearch({
+      apiKey,
+      q: q || "",
+      relevanceLanguage: targetYt,
+      maxResults: 5,
+      channelId: s.channelId,
+    });
+
+    for (const it of items) {
+      const id = it?.id?.videoId;
+      if (!id) continue;
+
+      const sid = String(id);
+      if (dislikedSet.has(sid)) continue;
+      if (isBlocked(sid)) continue;
+
+      ids.push(id);
+    }
+  }
+
+  return ids;
+}
+
+/* ================= main ================= */
+
 async function buildRecommendations(jwtUser) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error("Missing YOUTUBE_API_KEY");
@@ -103,24 +403,32 @@ async function buildRecommendations(jwtUser) {
 
   if (!interests.length) return [];
 
-  // disliked videos (optional)
+  // disliked videos
   let dislikedSet = new Set();
   if (getFeedback) {
     try {
       const fb = getFeedback(jwtUser.userId);
       dislikedSet = new Set((fb?.disliked || []).map(String));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
-  // 1) Build queries
+  // queries
   const { nativeQueries, learningQueries, hints } = makeQueries(
     interests,
     targetLanguage
   );
 
-  // 2) Collect ids from both lanes
+  // seed lane
+  const seeds = getSeedChannelsForLanguage(targetLanguage);
+  const seedIds = await collectIdsFromSeedChannels({
+    apiKey,
+    seeds,
+    q: interests[0] || "",
+    targetYt,
+    dislikedSet,
+  });
+
+  // native + learning lanes
   const nativeIds = await collectIdsFromQueries({
     apiKey,
     queries: nativeQueries,
@@ -135,9 +443,16 @@ async function buildRecommendations(jwtUser) {
     dislikedSet,
   });
 
-  // 3) Merge ids: prefer native, then learning
+  // merge (seed > native > learning)
   const uniqueIds = [];
   const seen = new Set();
+
+  for (const id of seedIds) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    uniqueIds.push(id);
+    if (uniqueIds.length >= 15) break;
+  }
 
   for (const id of nativeIds) {
     if (seen.has(id)) continue;
@@ -153,19 +468,20 @@ async function buildRecommendations(jwtUser) {
     if (uniqueIds.length >= 50) break;
   }
 
-  if (uniqueIds.length === 0) return [];
+  if (!uniqueIds.length) return [];
 
-  // 4) Fetch details
+  // fetch details
   const details = await ytVideosDetails({ apiKey, ids: uniqueIds });
 
-  // 5) Filter + label + score
+  // filter + score
   const out = [];
   for (const v of details) {
     const sn = v?.snippet;
     if (!sn) continue;
-    if (dislikedSet.has(String(v.id))) continue;
 
-    // language check
+    if (dislikedSet.has(String(v.id))) continue;
+    if (isBlocked(String(v.id))) continue;
+
     const okLang = passesLanguageFilter({
       targetYt,
       targetFranc,
@@ -176,10 +492,12 @@ async function buildRecommendations(jwtUser) {
     const title = sn.title || "";
     const description = sn.description || "";
 
-    // learning detection (uses language-specific stopwords from hints)
-    const isLearning = containsAny(`${title}\n${description}`, hints.learnStop);
+    const isLearning = containsAny(
+      `${title}\n${description}`,
+      hints.learnStop
+    );
 
-    const score = isLearning ? 0 : 10; // native > learning
+    const score = isLearning ? 0 : 10;
 
     out.push({
       id: v.id,
@@ -194,9 +512,9 @@ async function buildRecommendations(jwtUser) {
     });
   }
 
-  // 6) Sort and return clean
   out.sort((a, b) => (b._score || 0) - (a._score || 0));
   return out.slice(0, 20).map(({ _score, ...rest }) => rest);
 }
 
 module.exports = { buildRecommendations };
+

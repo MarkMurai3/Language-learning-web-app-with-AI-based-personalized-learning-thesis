@@ -5,6 +5,8 @@ export default function Navbar({ onToggleNotes }) {
   const navigate = useNavigate();
   const loggedIn = isLoggedIn();
   const user = getUser();
+  const isAdmin = user?.role === "admin";
+
 
   function handleLogout() {
     clearAuth();
@@ -25,6 +27,7 @@ export default function Navbar({ onToggleNotes }) {
           <Link to="/profile">Profile</Link>
           <Link to="/history">History</Link>
           <Link to="/chat">Chat</Link>
+          {isAdmin && <Link to="/admin">Admin</Link>}
 
           <button type="button" onClick={onToggleNotes}>
             Notes

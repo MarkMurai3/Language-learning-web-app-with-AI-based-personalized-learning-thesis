@@ -1,25 +1,34 @@
 const express = require("express");
-const requireAuth = require("../middleware/requireAuth");
-const { like, dislike, getFeedback } = require("../services/feedback.service");
-
 const router = express.Router();
 
-router.get("/", requireAuth, (req, res) => {
-  res.json(getFeedback(req.user.userId));
+const { getFeedback, likeVideo, dislikeVideo } = require("../services/feedback.service");
+const requireAuth = require("../middleware/requireAuth");
+router.use(requireAuth);
+
+
+// assumes you already have JWT middleware that sets req.user
+// example: const { requireAuth } = require("../middleware/auth");
+// router.use(requireAuth);
+
+router.get("/", (req, res) => {
+  const fb = getFeedback(req.user.userId);
+  res.json({ feedback: fb });
 });
 
-router.post("/like", requireAuth, (req, res) => {
+router.post("/like", (req, res) => {
   const { videoId } = req.body;
-  if (!videoId) return res.status(400).json({ error: "Missing videoId" });
+  if (!videoId) return res.status(400).json({ message: "videoId is required" });
 
-  res.json(like(req.user.userId, String(videoId)));
+  const fb = likeVideo(req.user.userId, videoId);
+  res.json({ feedback: fb });
 });
 
-router.post("/dislike", requireAuth, (req, res) => {
+router.post("/dislike", (req, res) => {
   const { videoId } = req.body;
-  if (!videoId) return res.status(400).json({ error: "Missing videoId" });
+  if (!videoId) return res.status(400).json({ message: "videoId is required" });
 
-  res.json(dislike(req.user.userId, String(videoId)));
+  const fb = dislikeVideo(req.user.userId, videoId);
+  res.json({ feedback: fb });
 });
 
 module.exports = router;

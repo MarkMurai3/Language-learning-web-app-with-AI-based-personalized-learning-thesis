@@ -1,22 +1,38 @@
 const bcrypt = require("bcrypt");
 
 // In-memory store (TEMP). Later replace with database.
-const users = new Map(); // key: email, value: user object
+// key: normalized email (lowercase)
+const users = new Map();
+
 let nextId = 1;
+
+/* ================= helpers ================= */
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
 
 function toPublicUser(user) {
   return {
     id: user.id,
     email: user.email,
-    username: user.username,
-    nativeLanguage: user.nativeLanguage,
     targetLanguage: user.targetLanguage,
-    targetLevel: user.targetLevel,
+    role: user.role,
+    disabled: user.disabled,
   };
 }
 
-async function registerUser({ email, password, username, nativeLanguage, targetLanguage, targetLevel }) {
-  if (users.has(email)) {
+/* ================= auth ================= */
+
+async function registerUser({ email, password, targetLanguage }) {
+  const emailNorm = normalizeEmail(email);
+  const adminEmailNorm = normalizeEmail(process.env.ADMIN_EMAIL);
+
+  console.log("[DEBUG] ADMIN_EMAIL raw:", process.env.ADMIN_EMAIL);
+  console.log("[DEBUG] adminEmail normalized:", adminEmailNorm);
+  console.log("[DEBUG] email normalized:", emailNorm);
+
+  if (users.has(emailNorm)) {
     const err = new Error("User already exists");
     err.code = "USER_EXISTS";
     throw err;
@@ -24,23 +40,29 @@ async function registerUser({ email, password, username, nativeLanguage, targetL
 
   const passwordHash = await bcrypt.hash(password, 10);
 
+  const role = emailNorm === adminEmailNorm ? "admin" : "user";
+
   const user = {
     id: nextId++,
-    email,
+    email: emailNorm, // store normalized
     passwordHash,
-    username: username || "",
-    nativeLanguage: nativeLanguage || "",
     targetLanguage: targetLanguage || "",
-    targetLevel: targetLevel || "",
+    role,
+    disabled: false,
   };
 
-  users.set(email, user);
+  users.set(emailNorm, user);
   return toPublicUser(user);
 }
 
 async function verifyUser(email, password) {
-  const user = users.get(email);
+  const emailNorm = normalizeEmail(email);
+  const user = users.get(emailNorm);
   if (!user) return null;
+
+  if (user.disabled) {
+    throw new Error("Account disabled");
+  }
 
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return null;
@@ -48,13 +70,14 @@ async function verifyUser(email, password) {
   return toPublicUser(user);
 }
 
-// Used by profile endpoints later
+/* ================= profile ================= */
+
 function updateUserById(userId, patch) {
-  // Find user in the Map (since our key is email)
   for (const [email, user] of users.entries()) {
     if (user.id === userId) {
-      users.set(email, { ...user, ...patch });
-      return toPublicUser(users.get(email));
+      const updated = { ...user, ...patch };
+      users.set(email, updated);
+      return toPublicUser(updated);
     }
   }
   return null;
@@ -69,10 +92,28 @@ function getUserById(userId) {
   return null;
 }
 
+/* ================= admin ================= */
+
+function _adminListUsers() {
+  return Array.from(users.values());
+}
+
+function _adminSetUserDisabled(id, disabled) {
+  for (const [email, user] of users.entries()) {
+    if (user.id === id) {
+      const updated = { ...user, disabled: !!disabled };
+      users.set(email, updated);
+      return updated;
+    }
+  }
+  return null;
+}
 
 module.exports = {
   registerUser,
   verifyUser,
-  updateUserById,
   getUserById,
+  updateUserById,
+  _adminListUsers,
+  _adminSetUserDisabled,
 };

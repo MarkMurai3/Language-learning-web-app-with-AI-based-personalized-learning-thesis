@@ -12,17 +12,17 @@ const LANGUAGE_OPTIONS = [
   "Hungarian",
 ];
 
-const LEVEL_OPTIONS = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// const LEVEL_OPTIONS = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 export default function Register() {
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
+  // const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
 
-  const [nativeLanguage, setNativeLanguage] = useState("Hungarian");
+  // const [nativeLanguage, setNativeLanguage] = useState("Hungarian");
   const [targetLanguage, setTargetLanguage] = useState("English");
-  const [targetLevel, setTargetLevel] = useState("A2");
+  // const [targetLevel, setTargetLevel] = useState("A2");
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -44,10 +44,10 @@ export default function Register() {
       const { user, token } = await registerApi(
         email,
         password,
-        username,
-        nativeLanguage,
+        // username,
+        // nativeLanguage,
         targetLanguage,
-        targetLevel
+        // targetLevel
       );
 
       saveAuth(token, user);
@@ -66,17 +66,17 @@ export default function Register() {
       <h1>Register</h1>
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10, maxWidth: 360 }}>
-        <label>
+        {/* <label>
           Username
           <input value={username} onChange={(e) => setUsername(e.target.value)} required />
-        </label>
+        </label> */}
 
         <label>
           Email
           <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
         </label>
 
-        <label>
+        {/* <label>
           Native language
           <select value={nativeLanguage} onChange={(e) => setNativeLanguage(e.target.value)}>
             {LANGUAGE_OPTIONS.map((l) => (
@@ -85,7 +85,7 @@ export default function Register() {
               </option>
             ))}
           </select>
-        </label>
+        </label> */}
 
         <label>
           Target language
@@ -98,7 +98,7 @@ export default function Register() {
           </select>
         </label>
 
-        <label>
+        {/* <label>
           Target level
           <select value={targetLevel} onChange={(e) => setTargetLevel(e.target.value)}>
             {LEVEL_OPTIONS.map((lvl) => (
@@ -107,7 +107,7 @@ export default function Register() {
               </option>
             ))}
           </select>
-        </label>
+        </label> */}
 
         <label>
           Password
