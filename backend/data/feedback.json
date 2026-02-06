@@ -1,3 +1,17 @@
 {
-  "users": {}
+  "users": {
+    "1": {
+      "liked": [
+        "s-kdM_vdZF0",
+        "QUgzf_0NFHk",
+        "e51wY83kLZk",
+        "WJ_-K8SCSsM"
+      ],
+      "disliked": [
+        "FMgTUpQyjvA",
+        "DdfSzQ-loqU",
+        "VAmFzwtfLIA"
+      ]
+    }
+  }
 }

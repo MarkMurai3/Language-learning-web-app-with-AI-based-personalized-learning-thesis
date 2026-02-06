@@ -10,6 +10,7 @@ import {
   dislikeVideo,
   addToHistory,
   searchVideos,
+  getFeedback,
 } from "../services/api";
 
 import { isLoggedIn, clearAuth } from "../services/authStorage";
@@ -33,6 +34,13 @@ export default function Home() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
 
+  // ✅ feedback state
+  const [feedback, setFeedback] = useState({ liked: [], disliked: [] });
+
+  // ✅ sets (string-safe)
+  const likedSet = new Set((feedback?.liked || []).map(String));
+  const dislikedSet = new Set((feedback?.disliked || []).map(String));
+
   useEffect(() => {
     // 1) must be logged in
     if (!isLoggedIn()) {
@@ -47,6 +55,11 @@ export default function Home() {
         clearAuth();
         navigate("/login");
       });
+
+    // ✅ load feedback
+    getFeedback()
+      .then((data) => setFeedback(data.feedback || { liked: [], disliked: [] }))
+      .catch(() => {});
 
     // 3) ensure interests exist
     getMyInterests()
@@ -74,7 +87,6 @@ export default function Home() {
           Array.isArray(data?.items?.items) ? data.items.items :
           Array.isArray(data?.results) ? data.results :
           Array.isArray(data?.data) ? data.data :
-          // if backend returns { items: {} } keyed by id:
           (data?.items && typeof data.items === "object") ? Object.values(data.items) :
           [];
 
@@ -114,7 +126,7 @@ export default function Home() {
       setSearchResults(data.items || []);
     } catch (e2) {
       setSearchError(e2.message || "Search failed");
-      setSearchResults([]); // show empty state if it fails
+      setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
@@ -127,8 +139,11 @@ export default function Home() {
     setSearchText("");
   }
 
-  // ✅ Choose which list to show
-  const listToShow = searchResults !== null ? searchResults : items;
+  // ✅ Choose which list to show + filter disliked (UI-level)
+  const listRaw = searchResults !== null ? searchResults : items;
+  const listToShow = (listRaw || []).filter(
+    (v) => !dislikedSet.has(String(v?.id))
+  );
 
   return (
     <div>
@@ -143,7 +158,7 @@ export default function Home() {
         <p>Verifying login...</p>
       )}
 
-      {/* 🔎 SEARCH UI (put under verification) */}
+      {/* 🔎 SEARCH UI */}
       <form
         onSubmit={handleSearchSubmit}
         style={{ display: "flex", gap: 10, maxWidth: 700, margin: "12px 0" }}
@@ -202,10 +217,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* Title changes depending on mode */}
       <h2>{searchResults !== null ? "Search results" : "Recommendations"}</h2>
 
-      {/* Show recommendation error only when not searching */}
       {searchResults === null && recError && (
         <p style={{ color: "crimson" }}>{recError}</p>
       )}
@@ -213,9 +226,7 @@ export default function Home() {
       <div style={{ display: "grid", gap: 12, maxWidth: 700 }}>
         {listToShow.length === 0 ? (
           <p>
-            {searchResults !== null
-              ? "No search results."
-              : "No recommendations yet."}
+            {searchResults !== null ? "No search results." : "No recommendations yet."}
           </p>
         ) : (
           listToShow.map((v, idx) => (
@@ -225,6 +236,10 @@ export default function Home() {
               channel={v?.channel ?? "(no channel)"}
               url={v?.url ?? ""}
               reason={v?.reason ?? ""}
+
+              // ✅ flags for UI (button state)
+              liked={likedSet.has(String(v?.id))}
+              disliked={dislikedSet.has(String(v?.id))}
 
               onPlay={async () => {
                 await saveHistory(v);
@@ -237,8 +252,24 @@ export default function Home() {
                 if (v?.url) window.open(v.url, "_blank", "noreferrer");
               }}
 
-              onLike={() => v?.id && likeVideo(v.id)}
-              onDislike={() => v?.id && dislikeVideo(v.id)}
+              // ✅ like updates feedback immediately
+              onLike={async () => {
+                if (!v?.id) return;
+                const data = await likeVideo(v.id);
+                setFeedback(data.feedback || { liked: [], disliked: [] });
+              }}
+
+              // ✅ dislike updates feedback + removes from lists immediately
+              onDislike={async () => {
+                if (!v?.id) return;
+                const data = await dislikeVideo(v.id);
+                setFeedback(data.feedback || { liked: [], disliked: [] });
+
+                setItems((prev) => prev.filter((x) => x?.id !== v.id));
+                setSearchResults((prev) =>
+                  prev ? prev.filter((x) => x?.id !== v.id) : prev
+                );
+              }}
             />
           ))
         )}

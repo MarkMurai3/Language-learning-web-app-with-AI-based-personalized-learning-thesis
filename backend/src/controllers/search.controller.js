@@ -3,6 +3,14 @@ const { getLangCodes } = require("../services/languageMap");
 const { translateToTarget } = require("../services/translate.service");
 const { ytSearch, ytVideosDetails } = require("../services/youtube.service");
 
+// OPTIONAL: feedback (dislikes)
+let getFeedback;
+try {
+  ({ getFeedback } = require("../services/feedback.service"));
+} catch {
+  getFeedback = null;
+}
+
 // reuse your passesLanguageFilter from recommendation.service.js if you want strict filtering
 const franc = require("franc");
 
@@ -56,13 +64,27 @@ async function searchVideos(req, res) {
 
     const ids = [...new Set(items.map((it) => it?.id?.videoId).filter(Boolean))].slice(0, 30);
 
+    // ✅ Disliked filtering (optional)
+    let dislikedSet = new Set();
+    if (getFeedback) {
+      try {
+        const fb = getFeedback(req.user.userId);
+        dislikedSet = new Set((fb?.disliked || []).map(String));
+      } catch {}
+    }
+
+    const filteredIds = ids.filter((id) => !dislikedSet.has(String(id)));
+
     // 3) details + filter
-    const details = await ytVideosDetails({ apiKey, ids });
+    const details = await ytVideosDetails({ apiKey, ids: filteredIds });
 
     const out = [];
     for (const v of details) {
       const sn = v?.snippet;
       if (!sn) continue;
+
+      // ✅ safety check: never return disliked
+      if (dislikedSet.has(String(v.id))) continue;
 
       if (!passesLanguageFilter({ targetYt, targetFranc, videoSnippet: sn })) continue;
 

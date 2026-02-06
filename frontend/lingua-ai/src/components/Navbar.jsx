@@ -27,6 +27,7 @@ export default function Navbar({ onToggleNotes }) {
           <Link to="/profile">Profile</Link>
           <Link to="/history">History</Link>
           <Link to="/chat">Chat</Link>
+          <Link to="/roleplay">Roleplay</Link>
           {isAdmin && <Link to="/admin">Admin</Link>}
 
           <button type="button" onClick={onToggleNotes}>

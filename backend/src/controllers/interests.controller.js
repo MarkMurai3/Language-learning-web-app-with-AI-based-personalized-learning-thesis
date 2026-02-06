@@ -5,19 +5,18 @@ const {
 } = require("../services/interests.service");
 
 function getAvailableInterests(req, res) {
-  res.json({ interests: listAvailableInterests() });
+  return res.json({ catalog: listAvailableInterests() });
 }
 
 function getMyInterests(req, res) {
   const userId = req.user.userId;
-  res.json({ interests: getInterestsForUser(userId) });
+  return res.json(getInterestsForUser(userId)); // { interests: [{id, weight}], prefs: {...} }
 }
 
 function setMyInterests(req, res) {
   const userId = req.user.userId;
-  const { interests } = req.body; // expects array of strings
-  const saved = setInterestsForUser(userId, interests);
-  res.json({ interests: saved });
+  const saved = setInterestsForUser(userId, req.body); // expects { interests, prefs }
+  return res.json(saved);
 }
 
 module.exports = {

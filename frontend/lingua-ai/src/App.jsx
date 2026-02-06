@@ -10,6 +10,8 @@ import History from "./pages/History";
 import Chat from "./pages/Chat";
 import NotesWidget from "./components/NotesWidget";
 import Admin from "./pages/Admin";
+import Roleplay from "./pages/Roleplay";
+
 
 
 export default function App() {
@@ -30,7 +32,9 @@ export default function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/history" element={<History />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/roleplay" element={<Roleplay />} />
           <Route path="/admin" element={<Admin />} />
+
 
         </Routes>
       </div>

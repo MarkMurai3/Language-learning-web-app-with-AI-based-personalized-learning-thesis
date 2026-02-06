@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendChat, tts, stt, sttLocal } from "../services/api";
+import { sendChat, tts, stt } from "../services/api"; //sttLocal deleted
 import { isLoggedIn, clearAuth } from "../services/authStorage";
 
 
@@ -25,7 +25,7 @@ export default function Chat() {
   const [voice, setVoice] = useState("coral"); // matches backend default
   const [recording, setRecording] = useState(false);
   const [sttLoading, setSttLoading] = useState(false);
-  const [sttProvider, setSttProvider] = useState("openai"); // "openai" | "local"
+  // const [sttProvider, setSttProvider] = useState("openai"); // "openai" | "local"
 
 
   // let mediaRecorderRef = null;
@@ -215,13 +215,13 @@ function stopRecording() {
           {speaking ? "Speaking..." : "Speak last reply"}
         </button>
 
-        <label>
+        {/* <label>
           STT Provider{" "}
           <select value={sttProvider} onChange={(e) => setSttProvider(e.target.value)}>
             <option value="openai">OpenAI (cloud)</option>
             <option value="local">Whisper (local)</option>
           </select>
-        </label>
+        </label> */}
 
         <button type="button" onClick={handleReset}>
           Reset chat

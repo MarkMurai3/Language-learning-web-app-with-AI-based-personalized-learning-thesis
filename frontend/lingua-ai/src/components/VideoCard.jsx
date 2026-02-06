@@ -25,6 +25,8 @@ export default function VideoCard({
   onOpen,
   onLike,
   onDislike,
+  liked,
+  disliked,
 }) {
   return (
     <div style={{ border: "1px solid #ddd", padding: 12, borderRadius: 8 }}>
@@ -53,13 +55,14 @@ export default function VideoCard({
           Open on YouTube
         </button>
 
-        <button type="button" onClick={onLike} disabled={!onLike}>
-          Like
+        <button type="button" onClick={onLike} disabled={!onLike || disliked}>
+          {liked ? "Liked ✓" : "Like"}
         </button>
 
-        <button type="button" onClick={onDislike} disabled={!onDislike}>
-          Dislike
+        <button type="button" onClick={onDislike} disabled={!onDislike || liked}>
+          {disliked ? "Disliked ✕" : "Dislike"}
         </button>
+
       </div>
     </div>
   );
