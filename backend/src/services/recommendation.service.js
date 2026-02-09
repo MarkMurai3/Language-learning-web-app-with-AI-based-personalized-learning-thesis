@@ -40,9 +40,12 @@ function passesLanguageFilter({ targetYt, targetFranc, videoSnippet }) {
   if (textLang) return textLang === targetYt;
 
   const detected = detectTextLanguageISO3(`${title}\n${description}`);
-  if (detected === "und") return false; // ✅ strict: if we can't tell, skip
-  return detected === targetFranc;
 
+  // allow unknown, but prevent obvious English leaking into non-English targets
+  if (detected === "und") return true;
+  if (targetFranc !== "eng" && detected === "eng") return false;
+
+  return detected === targetFranc;
 }
 
 function containsAny(text, words) {
@@ -106,8 +109,10 @@ function buildQueriesFromInterests(interests, targetLanguageName) {
       for (let i = 0; i < weight; i++) nativeQueries.push(kw);
 
       // learning lane optional; keep very light
-      learningQueries.push(`learn ${kw}`);
-      learningQueries.push(`${kw} explained`);
+      learningQueries.push(`${kw} ${targetLanguageName}`);
+      learningQueries.push(`${kw} in ${targetLanguageName}`);
+      learningQueries.push(`learn ${kw} ${targetLanguageName}`);
+
     }
   }
 
@@ -181,15 +186,12 @@ async function buildRecommendations(jwtUser) {
   if (!apiKey) throw new Error("Missing YOUTUBE_API_KEY");
 
   const { interests, prefs } = getInterestsForUser(jwtUser.userId);
-  if (!interests.length) return [];
-
+  if (!interests || interests.length === 0) return [];
 
   const profile = getUserById(jwtUser.userId);
 
   const targetLanguage = profile?.targetLanguage || "English";
   const { yt: targetYt, franc: targetFranc } = getLangCodes(targetLanguage);
-
-  if (!interests.length) return [];
 
   // disliked videos
   let dislikedSet = new Set();
@@ -218,18 +220,20 @@ async function buildRecommendations(jwtUser) {
     }
   }
 
-
-
   // queries
-  const { nativeQueries, learningQueries, hints } = buildQueriesFromInterests(interests, targetLanguage);
+  const { nativeQueries, learningQueries, hints } =
+    buildQueriesFromInterests(interests, targetLanguage);
 
+  // ✅ FIX: firstKeyword for seed search (avoid [object Object])
+  const firstKeyword =
+    extractKeywordsFromInterestId(interests?.[0]?.id)?.[0] || "";
 
   // seed lane
   const seeds = getSeedChannelsForLanguage(targetLanguage);
   const seedIds = await collectIdsFromSeedChannels({
     apiKey,
     seeds,
-    q: interests[0] || "",
+    q: firstKeyword,
     targetYt,
     dislikedSet,
   });
@@ -251,8 +255,6 @@ async function buildRecommendations(jwtUser) {
       dislikedSet,
     });
   }
-
-
   // merge (seed > native > learning)
   const uniqueIds = [];
   const seen = new Set();
@@ -307,7 +309,7 @@ async function buildRecommendations(jwtUser) {
     // ✅ if user says "avoid learning content", hard filter it out
     if (prefs?.avoidLearningContent && isLearning) continue;
 
-    const score = isLearning ? 0 : 10;
+    let score = isLearning ? 0 : 10;
 
     // ✅ boost if user liked this channel before
     const chId = sn.channelId ? String(sn.channelId) : "";

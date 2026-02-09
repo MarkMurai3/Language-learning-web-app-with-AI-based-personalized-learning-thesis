@@ -15,7 +15,7 @@ function listAvailableInterests() {
 }
 
 function getInterestsForUser(userId) {
-  return userData.get(userId) || { interests: [], prefs: { avoidLearningContent: true } };
+  return userData.get(userId) || { interests: [], prefs: { avoidLearningContent: false } };
 }
 
 function normalizeId(id) {

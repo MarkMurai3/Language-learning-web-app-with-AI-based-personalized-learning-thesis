@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getProfile, updateProfile } from "../services/api";
+import { Link, useNavigate } from "react-router-dom";
+import { getProfile, updateProfile, getMyInterests } from "../services/api";
 import { isLoggedIn, clearAuth, setUser } from "../services/authStorage";
 
 const LANGUAGE_OPTIONS = ["English", "French", "Spanish", "Italian", "German", "Hungarian"];
-const LEVEL_OPTIONS = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 export default function Profile() {
   const navigate = useNavigate();
 
-  // const [username, setUsernameState] = useState("");
-  // const [nativeLanguage, setNativeLanguage] = useState("Hungarian");
   const [targetLanguage, setTargetLanguage] = useState("English");
-  // const [targetLevel, setTargetLevel] = useState("A2");
+
+  const [myInterests, setMyInterests] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,17 +25,20 @@ export default function Profile() {
 
     async function load() {
       setError("");
+      setSuccess("");
       setLoading(true);
 
       try {
+        // 1) load profile
         const data = await getProfile();
-        const u = data.user;
-
-        // setUsernameState(u.username || "");
-        // setNativeLanguage(u.nativeLanguage || "Hungarian");
+        const u = data.user || {};
         setTargetLanguage(u.targetLanguage || "English");
-        // setTargetLevel(u.targetLevel || "A2");
+
+        // 2) load interests
+        const interestsData = await getMyInterests();
+        setMyInterests(interestsData.interests || []);
       } catch (e) {
+        // If token is invalid / expired -> log out
         clearAuth();
         navigate("/login");
       } finally {
@@ -56,17 +57,14 @@ export default function Profile() {
 
     try {
       const data = await updateProfile({
-        // username,
-        // nativeLanguage,
         targetLanguage,
-        // targetLevel,
       });
 
       // Update localStorage user so Navbar updates immediately
       setUser(data.user);
       setSuccess("Profile updated!");
     } catch (e) {
-      setError(e.message || "Failed to update profile");
+      setError(e?.message || "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -79,22 +77,6 @@ export default function Profile() {
       <h1>Profile</h1>
 
       <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 360 }}>
-        {/* <label>
-          Username
-          <input value={username} onChange={(e) => setUsernameState(e.target.value)} />
-        </label> */}
-
-        {/* <label>
-          Native language
-          <select value={nativeLanguage} onChange={(e) => setNativeLanguage(e.target.value)}>
-            {LANGUAGE_OPTIONS.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </label> */}
-
         <label>
           Target language
           <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)}>
@@ -106,17 +88,6 @@ export default function Profile() {
           </select>
         </label>
 
-        {/* <label>
-          Target level
-          <select value={targetLevel} onChange={(e) => setTargetLevel(e.target.value)}>
-            {LEVEL_OPTIONS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {lvl}
-              </option>
-            ))}
-          </select>
-        </label> */}
-
         <button disabled={saving} type="submit">
           {saving ? "Saving..." : "Save profile"}
         </button>
@@ -124,6 +95,18 @@ export default function Profile() {
         {error && <p style={{ color: "crimson" }}>{error}</p>}
         {success && <p style={{ color: "green" }}>{success}</p>}
       </form>
+
+      {/* Interests preview + edit button */}
+      <div style={{ marginTop: 16, opacity: 0.9 }}>
+        <b>Interests:</b>{" "}
+        {myInterests.length ? myInterests.map((x) => x.id).join(", ") : "none"}
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <Link to="/interests">
+          <button type="button">Edit interests</button>
+        </Link>
+      </div>
     </div>
   );
 }
