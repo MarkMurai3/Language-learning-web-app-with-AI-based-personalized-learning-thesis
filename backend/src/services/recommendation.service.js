@@ -184,11 +184,12 @@ async function collectIdsFromSeedChannels({
 async function buildRecommendations(jwtUser) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error("Missing YOUTUBE_API_KEY");
-
-  const { interests, prefs } = getInterestsForUser(jwtUser.userId);
+  
+  const { interests, prefs } = await getInterestsForUser(jwtUser.userId);
   if (!interests || interests.length === 0) return [];
 
-  const profile = getUserById(jwtUser.userId);
+  const profile = await getUserById(jwtUser.userId);
+
 
   const targetLanguage = profile?.targetLanguage || "English";
   const { yt: targetYt, franc: targetFranc } = getLangCodes(targetLanguage);

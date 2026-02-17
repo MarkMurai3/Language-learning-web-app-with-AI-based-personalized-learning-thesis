@@ -4,13 +4,14 @@ import { register as registerApi } from "../services/api";
 import { saveAuth } from "../services/authStorage";
 
 const LANGUAGE_OPTIONS = [
-  "English",
-  "French",
-  "Spanish",
-  "Italian",
-  "German",
-  "Hungarian",
+  "English", "French", "Spanish", "German", "Italian", "Portuguese",
+  "Mandarin Chinese", "Arabic", "Russian", "Japanese", "Korean", "Hindi",
+  "Thai", "Vietnamese", "Indonesian", "Bengali", "Urdu", "Turkish",
+  "Polish", "Swedish", "Finnish", "Romanian", "Dutch", "Czech", "Greek",
+  "Bulgarian", "Swahili", "Afrikaans", "Norwegian", "Tagalog",
+  "Ukrainian", "Hebrew", "Malay", "Tamil"
 ];
+
 
 // const LEVEL_OPTIONS = ["A1", "A2", "B1", "B2", "C1", "C2"];
 

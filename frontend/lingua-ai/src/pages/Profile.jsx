@@ -3,7 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { getProfile, updateProfile, getMyInterests } from "../services/api";
 import { isLoggedIn, clearAuth, setUser } from "../services/authStorage";
 
-const LANGUAGE_OPTIONS = ["English", "French", "Spanish", "Italian", "German", "Hungarian"];
+const LANGUAGE_OPTIONS = [
+  "English", "French", "Spanish", "German", "Italian", "Portuguese",
+  "Mandarin Chinese", "Arabic", "Russian", "Japanese", "Korean", "Hindi",
+  "Thai", "Vietnamese", "Indonesian", "Bengali", "Urdu", "Turkish",
+  "Polish", "Swedish", "Finnish", "Romanian", "Dutch", "Czech", "Greek",
+  "Bulgarian", "Swahili", "Afrikaans", "Norwegian", "Tagalog",
+  "Ukrainian", "Hebrew", "Malay", "Tamil"
+];
 
 export default function Profile() {
   const navigate = useNavigate();

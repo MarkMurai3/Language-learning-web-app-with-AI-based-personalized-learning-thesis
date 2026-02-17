@@ -11,6 +11,8 @@ function normLang(s) {
   return String(s || "").trim().toLowerCase();
 }
 
+// ✅ Remove starterAssistant from ALL scenarios.
+// Keep starterUser optional (can be in any language; it's just a suggestion)
 const ROLEPLAYS = [
   {
     id: "grocery_store",
@@ -19,11 +21,9 @@ const ROLEPLAYS = [
     description:
       "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
     starterUser: "¡Hola! Busco ingredientes para hacer pasta. ¿Me puedes ayudar?",
-    starterAssistant: "¡Hola! Claro 😊 ¿Qué quieres cocinar exactamente y para cuántas personas?",
     systemPrompt: `
 You are a grocery store employee.
 The user is a customer trying to buy ingredients.
-Speak ONLY in the user's target language.
 Be natural, friendly, and realistic.
 Ask short follow-up questions to keep the conversation going.
 If the user uses the wrong word or grammar, correct gently and continue the roleplay.
@@ -36,11 +36,9 @@ If the user uses the wrong word or grammar, correct gently and continue the role
     description:
       "You are lost in a city. Ask someone for directions, clarify landmarks, and confirm you understood. The assistant is a local person.",
     starterUser: "Excusez-moi, vous pouvez m’aider ? Je cherche la gare.",
-    starterAssistant: "Bien sûr ! Tu es à pied ou en voiture ? Et tu sais où tu es en ce moment ?",
     systemPrompt: `
 You are a local person on the street.
 The user is lost and asks for directions.
-Speak ONLY in the user's target language.
 Ask clarifying questions (where they want to go, landmarks, etc.).
 Use simple, practical directions and confirm understanding.
 Correct mistakes gently without breaking the roleplay.
@@ -53,11 +51,9 @@ Correct mistakes gently without breaking the roleplay.
     description:
       "You’re at a restaurant. Ask about the menu, order food and drinks, and handle small problems (spicy, allergies, etc.). The assistant is the waiter.",
     starterUser: "Hello! Could I see the menu, please?",
-    starterAssistant: "Of course! Here you go 😊 Do you have any allergies or preferences today?",
     systemPrompt: `
 You are a waiter in a restaurant.
 The user is ordering food.
-Speak ONLY in the user's target language.
 Ask about preferences, allergies, drinks, desserts.
 Be polite and conversational.
 Correct mistakes gently and continue.
@@ -70,51 +66,44 @@ Correct mistakes gently and continue.
     description:
       "You arrive at a hotel. Check in, confirm your booking, ask about breakfast/Wi-Fi, and request anything you need. The assistant is the receptionist.",
     starterUser: "Hi, I have a reservation under the name Márk Murai.",
-    starterAssistant: "Welcome! 😊 Great — may I see your ID, and what dates are you staying with us?",
     systemPrompt: `
 You are a hotel receptionist.
-The user is checking in to their hotel.
-Speak ONLY in the user's target language.
-Ask for name, booking details, dates, ID, and preferences.
-Offer helpful info (breakfast time, Wi-Fi, checkout time).
-Correct mistakes gently and keep going.
+The user is checking in.
+Be realistic and friendly.
+Ask short follow-up questions to keep the conversation going.
+Correct mistakes gently without breaking roleplay.
 `.trim(),
   },
   {
-  id: "grocery_store_it",
-  language: "Italian",
-  title: "Buying groceries",
-  description:
-    "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
-  starterUser: "Ciao! Cerco ingredienti per fare la pasta. Mi puoi aiutare?",
-  starterAssistant: "Ciao! Certo 😊 Che cosa vuoi cucinare esattamente e per quante persone?",
-  systemPrompt: `
+    id: "grocery_store_it",
+    language: "Italian",
+    title: "Buying groceries",
+    description:
+      "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
+    starterUser: "Ciao! Cerco ingredienti per fare la pasta. Mi puoi aiutare?",
+    systemPrompt: `
 You are a grocery store employee.
 The user is a customer trying to buy ingredients.
-Speak ONLY in the user's target language.
 Be natural, friendly, and realistic.
 Ask short follow-up questions to keep the conversation going.
 Correct mistakes gently and continue the roleplay.
 `.trim(),
-},
-{
-  id: "grocery_store_de",
-  language: "German",
-  title: "Buying groceries",
-  description:
-    "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
-  starterUser: "Hallo! Ich suche Zutaten, um Pasta zu kochen. Können Sie mir helfen?",
-  starterAssistant: "Hallo! Klar 😊 Was genau möchtest du kochen und für wie viele Personen?",
-  systemPrompt: `
+  },
+  {
+    id: "grocery_store_de",
+    language: "German",
+    title: "Buying groceries",
+    description:
+      "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
+    starterUser: "Hallo! Ich suche Zutaten, um Pasta zu kochen. Können Sie mir helfen?",
+    systemPrompt: `
 You are a grocery store employee.
 The user is a customer trying to buy ingredients.
-Speak ONLY in the user's target language.
 Be natural, friendly, and realistic.
 Ask short follow-up questions to keep the conversation going.
 Correct mistakes gently and continue the roleplay.
 `.trim(),
-},
-
+  },
 ];
 
 function pickScenarioForLanguage(targetLanguage, currentScenarioId = null) {
@@ -122,10 +111,10 @@ function pickScenarioForLanguage(targetLanguage, currentScenarioId = null) {
 
   const pool = ROLEPLAYS.filter((s) => normLang(s.language) === tl);
 
-  // if you don't have scenarios yet for that language, fallback to all
+  // If you don't have scenarios yet for that language, fallback to all
   const effectivePool = pool.length ? pool : ROLEPLAYS;
 
-  // avoid picking the same one if possible
+  // Avoid picking the same one if possible
   if (effectivePool.length > 1 && currentScenarioId) {
     let next = pickRandom(effectivePool);
     while (next.id === currentScenarioId) next = pickRandom(effectivePool);
@@ -179,31 +168,73 @@ export default function Roleplay() {
     setScenario(first);
   }, [navigate]);
 
-  // Whenever scenario changes (or assistantStarts), reset conversation
+  // ✅ Step 2 helper: generate the first assistant message in user's target language
+  async function generateAssistantStarter(nextScenario) {
+    const u = getUser();
+    const tl = u?.targetLanguage || "English";
+
+    const starterSystem = `
+You are running a language-learning ROLEPLAY.
+Target language: ${tl}
+
+RULES:
+- Speak ONLY in ${tl}. No English unless the user asks.
+- Stay in character and start the conversation naturally.
+- Keep the first message short (1–2 sentences).
+- Do NOT explain rules. Just roleplay.
+
+Scenario:
+${nextScenario.systemPrompt}
+
+User context:
+The user is about to start the roleplay now.
+`.trim();
+
+    const injected = [{ role: "system", content: starterSystem }];
+
+    const data = await sendChat(provider, injected);
+    return (data.reply || "").trim();
+  }
+
+  // ✅ Step 3: scenario reset effect (robust)
   useEffect(() => {
     if (!scenario) return;
 
-    const baseSystem = [
-      {
-        role: "system",
-        content: scenario.systemPrompt,
-      },
-      {
-        role: "system",
-        content: `Reminder: Speak ONLY in ${targetLanguage}. Stay in roleplay.`,
-      },
-    ];
+    let cancelled = false;
 
-    if (assistantStarts && scenario.starterAssistant) {
-      setMessages([...baseSystem, { role: "assistant", content: scenario.starterAssistant }]);
-    } else {
-      setMessages(baseSystem);
+    async function resetScenario() {
+      setError("");
+      setInput("");
+
+      const base = [{ role: "system", content: scenario.systemPrompt }];
+
+      // If assistant starts, generate the first line in the user's target language
+      if (assistantStarts) {
+        setLoading(true);
+        try {
+          const first = await generateAssistantStarter(scenario);
+          if (!cancelled) {
+            setMessages([...base, { role: "assistant", content: first }]);
+          }
+        } catch (e) {
+          if (!cancelled) {
+            setMessages(base);
+            setError(e?.message || "Failed to start roleplay");
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+        return;
+      }
+
+      setMessages(base);
     }
 
-    setInput("");
-    setError("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenario, assistantStarts, targetLanguage]);
+    resetScenario();
+    return () => {
+      cancelled = true;
+    };
+  }, [scenario, assistantStarts, provider]); // ✅ exactly as instructed
 
   const visibleMessages = useMemo(
     () => messages.filter((m) => m.role !== "system"),
@@ -324,7 +355,8 @@ export default function Roleplay() {
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div>
-          Scenario: <b>{scenario.title}</b> <span style={{ opacity: 0.7 }}>({targetLanguage})</span>
+          Scenario: <b>{scenario.title}</b>{" "}
+          <span style={{ opacity: 0.7 }}>({targetLanguage})</span>
         </div>
 
         <button type="button" onClick={newScenario} disabled={loading}>
@@ -342,9 +374,8 @@ export default function Roleplay() {
         <button
           type="button"
           onClick={() => {
-            // reset current scenario conversation
-            const resetScenario = pickScenarioForLanguage(targetLanguage, scenario.id);
-            setScenario(resetScenario); // easiest reliable reset
+            // Reset current scenario conversation (keep same scenario)
+            setScenario((prev) => (prev ? { ...prev } : prev));
           }}
           disabled={loading}
         >
@@ -355,16 +386,18 @@ export default function Roleplay() {
       <div style={{ marginTop: 10, opacity: 0.9 }}>
         <p style={{ margin: "8px 0" }}>{scenario.description}</p>
 
-        <p style={{ margin: "8px 0" }}>
-          Suggested start: <i>{scenario.starterUser}</i>{" "}
-          <button
-            type="button"
-            onClick={() => setInput(scenario.starterUser)}
-            style={{ marginLeft: 8 }}
-          >
-            Use
-          </button>
-        </p>
+        {scenario.starterUser ? (
+          <p style={{ margin: "8px 0" }}>
+            Suggested start: <i>{scenario.starterUser}</i>{" "}
+            <button
+              type="button"
+              onClick={() => setInput(scenario.starterUser)}
+              style={{ marginLeft: 8 }}
+            >
+              Use
+            </button>
+          </p>
+        ) : null}
       </div>
 
       <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
