@@ -6,7 +6,7 @@
 // }
 
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "https://language-learning-web-app-with-ai-based.onrender.com/api";
 import { getToken } from "./authStorage";
 
 
