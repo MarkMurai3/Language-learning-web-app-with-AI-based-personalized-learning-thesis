@@ -1,47 +1,127 @@
-const INTEREST_CATALOG = {
-  Movies: ["Comedy", "Drama", "Action", "Horror", "Sci-Fi", "Anime", "Documentary"],
-  Music: ["Pop", "Rock", "Hip-hop", "Electronic", "Jazz", "Classical"],
-  Gaming: ["FPS", "RPG", "Strategy", "Minecraft", "Esports", "Indie"],
-  Travel: ["City trips", "Nature", "Food travel", "Budget travel"],
-  Fitness: ["Gym", "Running", "Calisthenics", "Yoga", "Nutrition"],
-  Cooking: ["Easy recipes", "Baking", "Healthy", "Street food"],
-  Technology: ["Programming", "AI", "Gadgets", "Cybersecurity", "Web dev"],
-};
+const { pool } = require("../db");
 
-const userData = new Map(); // userId -> { interests: [{id, weight}], prefs: {...} }
+// Returns catalog as { Movies: ["Comedy", ...], ... }
+async function listAvailableInterests() {
+  const res = await pool.query(
+    `
+    SELECT key, label, parent_key
+    FROM interests
+    WHERE is_custom = false
+    ORDER BY parent_key NULLS FIRST, label ASC
+    `
+  );
 
-function listAvailableInterests() {
-  return INTEREST_CATALOG;
+  const out = {};
+  for (const row of res.rows) {
+    if (!row.parent_key) {
+      if (!out[row.key]) out[row.key] = [];
+    } else {
+      if (!out[row.parent_key]) out[row.parent_key] = [];
+      out[row.parent_key].push(row.label);
+    }
+  }
+
+  return out;
 }
 
-function getInterestsForUser(userId) {
-  return userData.get(userId) || { interests: [], prefs: { avoidLearningContent: false } };
+// Returns { interests: [{id, weight}], prefs: { avoidLearningContent } }
+async function getInterestsForUser(userId) {
+  const prefsRes = await pool.query(
+    `SELECT avoid_learning_content FROM user_prefs WHERE user_id = $1`,
+    [userId]
+  );
+
+  const avoidLearningContent = !!prefsRes.rows[0]?.avoid_learning_content;
+
+  const interestsRes = await pool.query(
+    `
+    SELECT interest_key AS id, weight
+    FROM user_interests
+    WHERE user_id = $1
+    ORDER BY interest_key ASC
+    `,
+    [userId]
+  );
+
+  return {
+    interests: interestsRes.rows.map((r) => ({
+      id: r.id,
+      weight: r.weight === 2 ? 2 : 1,
+    })),
+    prefs: { avoidLearningContent },
+  };
 }
 
 function normalizeId(id) {
   return String(id || "").trim();
 }
 
-function setInterestsForUser(userId, payload) {
+async function ensureCustomInterestExists(key) {
+  // key like "custom:something"
+  const label = key.slice("custom:".length).trim();
+  if (!label) return;
+
+  await pool.query(
+    `
+    INSERT INTO interests (key, label, parent_key, is_custom)
+    VALUES ($1, $2, NULL, true)
+    ON CONFLICT (key) DO UPDATE SET label = EXCLUDED.label
+    `,
+    [key, label]
+  );
+}
+
+async function setInterestsForUser(userId, payload) {
   const interests = Array.isArray(payload?.interests) ? payload.interests : [];
   const prefs = payload?.prefs || {};
 
   const cleaned = interests
     .map((x) => ({
       id: normalizeId(x?.id),
-      weight: x?.weight === 2 ? 2 : 1, // only 1 or 2 for now
+      weight: x?.weight === 2 ? 2 : 1,
     }))
     .filter((x) => x.id);
 
-  const saved = {
-    interests: cleaned,
-    prefs: {
-      avoidLearningContent: !!prefs.avoidLearningContent,
-    },
-  };
+  // create any custom interests in catalog table
+  for (const it of cleaned) {
+    if (it.id.startsWith("custom:")) {
+      await ensureCustomInterestExists(it.id);
+    }
+  }
 
-  userData.set(userId, saved);
-  return saved;
+  // transaction: replace user_interests + upsert prefs
+  await pool.query("BEGIN");
+  try {
+    await pool.query(`DELETE FROM user_interests WHERE user_id = $1`, [userId]);
+
+    for (const it of cleaned) {
+      await pool.query(
+        `
+        INSERT INTO user_interests (user_id, interest_key, weight)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, interest_key) DO UPDATE SET weight = EXCLUDED.weight
+        `,
+        [userId, it.id, it.weight]
+      );
+    }
+
+    await pool.query(
+      `
+      INSERT INTO user_prefs (user_id, avoid_learning_content)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET avoid_learning_content = EXCLUDED.avoid_learning_content
+      `,
+      [userId, !!prefs.avoidLearningContent]
+    );
+
+    await pool.query("COMMIT");
+  } catch (e) {
+    await pool.query("ROLLBACK");
+    throw e;
+  }
+
+  return getInterestsForUser(userId);
 }
 
 module.exports = {

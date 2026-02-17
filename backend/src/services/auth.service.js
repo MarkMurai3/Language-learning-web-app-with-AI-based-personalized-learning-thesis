@@ -1,112 +1,165 @@
 const bcrypt = require("bcrypt");
-
-// In-memory store (TEMP). Later replace with database.
-// key: normalized email (lowercase)
-const users = new Map();
-
-let nextId = 1;
-
-/* ================= helpers ================= */
+const { pool } = require("../db");
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-function toPublicUser(user) {
+function toPublicUser(row) {
   return {
-    id: user.id,
-    email: user.email,
-    targetLanguage: user.targetLanguage,
-    role: user.role,
-    disabled: user.disabled,
+    id: row.id,
+    email: row.email,
+    targetLanguage: row.target_language,
+    role: row.role,
+    disabled: !!row.disabled,
   };
 }
-
-/* ================= auth ================= */
 
 async function registerUser({ email, password, targetLanguage }) {
   const emailNorm = normalizeEmail(email);
   const adminEmailNorm = normalizeEmail(process.env.ADMIN_EMAIL);
 
-  console.log("[DEBUG] ADMIN_EMAIL raw:", process.env.ADMIN_EMAIL);
-  console.log("[DEBUG] adminEmail normalized:", adminEmailNorm);
-  console.log("[DEBUG] email normalized:", emailNorm);
-
-  if (users.has(emailNorm)) {
-    const err = new Error("User already exists");
-    err.code = "USER_EXISTS";
-    throw err;
-  }
-
+  const role = emailNorm === adminEmailNorm ? "admin" : "user";
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const role = emailNorm === adminEmailNorm ? "admin" : "user";
+  try {
+    const result = await pool.query(
+      `
+      INSERT INTO users (email, password_hash, target_language, role, disabled)
+      VALUES ($1, $2, $3, $4, false)
+      RETURNING id, email, target_language, role, disabled
+      `,
+      [emailNorm, passwordHash, targetLanguage || "English", role]
+    );
 
-  const user = {
-    id: nextId++,
-    email: emailNorm, // store normalized
-    passwordHash,
-    targetLanguage: targetLanguage || "",
-    role,
-    disabled: false,
-  };
+    const user = toPublicUser(result.rows[0]);
 
-  users.set(emailNorm, user);
-  return toPublicUser(user);
+    // Ensure prefs row exists
+    await pool.query(
+      `
+      INSERT INTO user_prefs (user_id, avoid_learning_content)
+      VALUES ($1, false)
+      ON CONFLICT (user_id) DO NOTHING
+      `,
+      [user.id]
+    );
+
+    return user;
+  } catch (e) {
+    // Unique violation
+    if (e.code === "23505") {
+      const err = new Error("User already exists");
+      err.code = "USER_EXISTS";
+      throw err;
+    }
+    throw e;
+  }
 }
 
 async function verifyUser(email, password) {
   const emailNorm = normalizeEmail(email);
-  const user = users.get(emailNorm);
-  if (!user) return null;
 
-  if (user.disabled) {
+  const res = await pool.query(
+    `
+    SELECT id, email, password_hash, target_language, role, disabled
+    FROM users
+    WHERE email = $1
+    LIMIT 1
+    `,
+    [emailNorm]
+  );
+
+  const row = res.rows[0];
+  if (!row) return null;
+
+  if (row.disabled) {
     throw new Error("Account disabled");
   }
 
-  const ok = await bcrypt.compare(password, user.passwordHash);
+  const ok = await bcrypt.compare(password, row.password_hash);
   if (!ok) return null;
 
-  return toPublicUser(user);
+  return toPublicUser(row);
 }
 
-/* ================= profile ================= */
+async function getUserById(userId) {
+  const res = await pool.query(
+    `
+    SELECT id, email, target_language, role, disabled
+    FROM users
+    WHERE id = $1
+    LIMIT 1
+    `,
+    [userId]
+  );
 
-function updateUserById(userId, patch) {
-  for (const [email, user] of users.entries()) {
-    if (user.id === userId) {
-      const updated = { ...user, ...patch };
-      users.set(email, updated);
-      return toPublicUser(updated);
-    }
-  }
-  return null;
+  if (!res.rows[0]) return null;
+  return toPublicUser(res.rows[0]);
 }
 
-function getUserById(userId) {
-  for (const user of users.values()) {
-    if (user.id === userId) {
-      return toPublicUser(user);
-    }
+async function updateUserById(userId, patch) {
+  // Only allow known fields
+  const fields = [];
+  const values = [];
+  let idx = 1;
+
+  if (patch.targetLanguage !== undefined) {
+    fields.push(`target_language = $${idx++}`);
+    values.push(patch.targetLanguage || "English");
   }
-  return null;
+
+  if (patch.disabled !== undefined) {
+    fields.push(`disabled = $${idx++}`);
+    values.push(!!patch.disabled);
+  }
+
+  if (patch.role !== undefined) {
+    fields.push(`role = $${idx++}`);
+    values.push(patch.role);
+  }
+
+  if (!fields.length) return await getUserById(userId);
+
+  values.push(userId);
+
+  const res = await pool.query(
+    `
+    UPDATE users
+    SET ${fields.join(", ")}
+    WHERE id = $${idx}
+    RETURNING id, email, target_language, role, disabled
+    `,
+    values
+  );
+
+  if (!res.rows[0]) return null;
+  return toPublicUser(res.rows[0]);
 }
 
 /* ================= admin ================= */
 
-function _adminListUsers() {
-  return Array.from(users.values());
+async function _adminListUsers() {
+  const res = await pool.query(
+    `
+    SELECT id, email, target_language, role, disabled
+    FROM users
+    ORDER BY id ASC
+    `
+  );
+  return res.rows; // internal rows are fine; usersAdmin.service maps safe fields
 }
 
-function _adminSetUserDisabled(id, disabled) {
-  for (const [email, user] of users.entries()) {
-    if (user.id === id) {
-      const updated = { ...user, disabled: !!disabled };
-      users.set(email, updated);
-      return updated;
-    }
-  }
-  return null;
+async function _adminSetUserDisabled(id, disabled) {
+  const res = await pool.query(
+    `
+    UPDATE users
+    SET disabled = $2
+    WHERE id = $1
+    RETURNING id, email, target_language, role, disabled
+    `,
+    [id, !!disabled]
+  );
+  return res.rows[0] || null;
 }
 
 module.exports = {
