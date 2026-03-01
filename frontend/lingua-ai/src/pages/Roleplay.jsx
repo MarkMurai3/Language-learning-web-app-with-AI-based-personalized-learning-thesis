@@ -1,143 +1,71 @@
+// frontend/src/pages/Roleplay.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendChat, tts, stt } from "../services/api";
+import { sendChat, tts, stt, getRoleplayScenarios, prepareRoleplayScenario, getMe } from "../services/api";
 import { isLoggedIn, clearAuth, getUser } from "../services/authStorage";
+/**
+ * Reads token from localStorage. Adjust the key if your project stores it differently.
+ * Common options in projects like yours:
+ * - localStorage.getItem("auth_token")
+ * - localStorage.getItem("token")
+ * - JSON.parse(localStorage.getItem("auth_user"))?.token
+ */
+// function getAuthToken() {
+//   return (
+//     localStorage.getItem("auth_token") ||
+//     localStorage.getItem("token") ||
+//     (() => {
+//       try {
+//         const u = JSON.parse(localStorage.getItem("auth_user") || "null");
+//         return u?.token || "";
+//       } catch {
+//         return "";
+//       }
+//     })()
+//   );
+// }
 
 function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function normLang(s) {
-  return String(s || "").trim().toLowerCase();
-}
-
-// ✅ Remove starterAssistant from ALL scenarios.
-// Keep starterUser optional (can be in any language; it's just a suggestion)
-const ROLEPLAYS = [
-  {
-    id: "grocery_store",
-    language: "Spanish",
-    title: "Buying groceries",
-    description:
-      "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
-    starterUser: "¡Hola! Busco ingredientes para hacer pasta. ¿Me puedes ayudar?",
-    systemPrompt: `
-You are a grocery store employee.
-The user is a customer trying to buy ingredients.
-Be natural, friendly, and realistic.
-Ask short follow-up questions to keep the conversation going.
-If the user uses the wrong word or grammar, correct gently and continue the roleplay.
-`.trim(),
-  },
-  {
-    id: "directions",
-    language: "French",
-    title: "Asking for directions",
-    description:
-      "You are lost in a city. Ask someone for directions, clarify landmarks, and confirm you understood. The assistant is a local person.",
-    starterUser: "Excusez-moi, vous pouvez m’aider ? Je cherche la gare.",
-    systemPrompt: `
-You are a local person on the street.
-The user is lost and asks for directions.
-Ask clarifying questions (where they want to go, landmarks, etc.).
-Use simple, practical directions and confirm understanding.
-Correct mistakes gently without breaking the roleplay.
-`.trim(),
-  },
-  {
-    id: "restaurant",
-    language: "English",
-    title: "Ordering food",
-    description:
-      "You’re at a restaurant. Ask about the menu, order food and drinks, and handle small problems (spicy, allergies, etc.). The assistant is the waiter.",
-    starterUser: "Hello! Could I see the menu, please?",
-    systemPrompt: `
-You are a waiter in a restaurant.
-The user is ordering food.
-Ask about preferences, allergies, drinks, desserts.
-Be polite and conversational.
-Correct mistakes gently and continue.
-`.trim(),
-  },
-  {
-    id: "hotel_checkin",
-    language: "English",
-    title: "Hotel check-in",
-    description:
-      "You arrive at a hotel. Check in, confirm your booking, ask about breakfast/Wi-Fi, and request anything you need. The assistant is the receptionist.",
-    starterUser: "Hi, I have a reservation under the name Márk Murai.",
-    systemPrompt: `
-You are a hotel receptionist.
-The user is checking in.
-Be realistic and friendly.
-Ask short follow-up questions to keep the conversation going.
-Correct mistakes gently without breaking roleplay.
-`.trim(),
-  },
-  {
-    id: "grocery_store_it",
-    language: "Italian",
-    title: "Buying groceries",
-    description:
-      "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
-    starterUser: "Ciao! Cerco ingredienti per fare la pasta. Mi puoi aiutare?",
-    systemPrompt: `
-You are a grocery store employee.
-The user is a customer trying to buy ingredients.
-Be natural, friendly, and realistic.
-Ask short follow-up questions to keep the conversation going.
-Correct mistakes gently and continue the roleplay.
-`.trim(),
-  },
-  {
-    id: "grocery_store_de",
-    language: "German",
-    title: "Buying groceries",
-    description:
-      "You are in a grocery store. You want ingredients for a recipe. Ask for help, compare options, and pay. The assistant is the store employee.",
-    starterUser: "Hallo! Ich suche Zutaten, um Pasta zu kochen. Können Sie mir helfen?",
-    systemPrompt: `
-You are a grocery store employee.
-The user is a customer trying to buy ingredients.
-Be natural, friendly, and realistic.
-Ask short follow-up questions to keep the conversation going.
-Correct mistakes gently and continue the roleplay.
-`.trim(),
-  },
-];
-
-function pickScenarioForLanguage(targetLanguage, currentScenarioId = null) {
-  const tl = normLang(targetLanguage);
-
-  const pool = ROLEPLAYS.filter((s) => normLang(s.language) === tl);
-
-  // If you don't have scenarios yet for that language, fallback to all
-  const effectivePool = pool.length ? pool : ROLEPLAYS;
-
-  // Avoid picking the same one if possible
-  if (effectivePool.length > 1 && currentScenarioId) {
-    let next = pickRandom(effectivePool);
-    while (next.id === currentScenarioId) next = pickRandom(effectivePool);
-    return next;
-  }
-
-  return pickRandom(effectivePool);
-}
+// async function apiGet(path) {
+//   const token = getAuthToken();
+//   const res = await fetch(`${import.meta.env.VITE_API_URL || ""}${path}`, {
+//     method: "GET",
+//     headers: {
+//       "Content-Type": "application/json",
+//       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+//     },
+//   });
+//   const data = await res.json().catch(() => ({}));
+//   if (!res.ok) {
+//     const msg = data?.error || `Request failed: ${res.status}`;
+//     const err = new Error(msg);
+//     err.status = res.status;
+//     throw err;
+//   }
+//   return data;
+// }
 
 export default function Roleplay() {
   const navigate = useNavigate();
 
   const [provider, setProvider] = useState("openai");
-
-  // read target language from local storage user
   const [targetLanguage, setTargetLanguage] = useState("English");
 
-  // scenario starts as null, we choose it once we know the language
+  // list of scenario "stubs" from backend: [{id,title,description}]
+  const [scenarioList, setScenarioList] = useState([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState("");
+
+  // prepared (translated) scenario from backend:
+  // { id, title, description, starterUser, systemPrompt }
   const [scenario, setScenario] = useState(null);
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingScenario, setLoadingScenario] = useState(false);
   const [error, setError] = useState("");
   const [assistantStarts, setAssistantStarts] = useState(true);
 
@@ -153,97 +81,165 @@ export default function Roleplay() {
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
 
-  // Protect page + init language + initial scenario
+  async function fetchScenarioList() {
+    const data = await getRoleplayScenarios();
+    return data?.items || [];
+  }
+
+  async function prepareScenario(id) {
+    return prepareRoleplayScenario(id);
+  }
+
+  async function loadAndPrepareScenario(id) {
+    if (!id) return;
+
+    setError("");
+    setLoadingScenario(true);
+    setScenario(null);
+
+    try {
+      const prepared = await prepareScenario(id);
+
+      // keep UI label in sync with backend/user
+      if (prepared?.targetLanguage) setTargetLanguage(prepared.targetLanguage);
+
+      setScenario(prepared?.scenario || null);
+    } catch (e) {
+      const msg = e?.message || "Failed to load scenario";
+      if (String(msg).toLowerCase().includes("token") || e?.status === 401) {
+        clearAuth();
+        navigate("/login");
+        return;
+      }
+      setError(msg);
+    } finally {
+      setLoadingScenario(false);
+    }
+  }
+
+  // Initial page protection + load scenario list + prepare first scenario
   useEffect(() => {
     if (!isLoggedIn()) {
       navigate("/login");
       return;
     }
 
-    const u = getUser();
-    const tl = u?.targetLanguage || "English";
-    setTargetLanguage(tl);
+  // Load targetLanguage from backend (source of truth). Fallback to localStorage.
+  (async () => {
+    try {
+      const me = await getMe(); // GET /api/me
+      const tl = me?.user?.targetLanguage || "English";
+      setTargetLanguage(tl);
+    } catch {
+      const u = getUser();
+      setTargetLanguage(u?.targetLanguage || "English");
+    }
+  })();
 
-    const first = pickScenarioForLanguage(tl);
-    setScenario(first);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await fetchScenarioList();
+        if (cancelled) return;
+
+        setScenarioList(list);
+
+        // pick first scenario: either first in list, or random
+        const firstId = list?.[0]?.id || "";
+        const chosenId = firstId || "";
+        setSelectedScenarioId(chosenId);
+
+        if (chosenId) {
+          await loadAndPrepareScenario(chosenId);
+        } else {
+          setError("No roleplay scenarios available.");
+        }
+      } catch (e) {
+        if (cancelled) return;
+        const msg = e?.message || "Failed to load roleplay scenarios";
+        if (String(msg).toLowerCase().includes("token") || e?.status === 401) {
+          clearAuth();
+          navigate("/login");
+          return;
+        }
+        setError(msg);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
-  // ✅ Step 2 helper: generate the first assistant message in user's target language
-  async function generateAssistantStarter(nextScenario) {
-    const u = getUser();
-    const tl = u?.targetLanguage || "English";
-
-    const starterSystem = `
-You are running a language-learning ROLEPLAY.
-Target language: ${tl}
-
-RULES:
-- Speak ONLY in ${tl}. No English unless the user asks.
-- Stay in character and start the conversation naturally.
-- Keep the first message short (1–2 sentences).
-- Do NOT explain rules. Just roleplay.
-
-Scenario:
-${nextScenario.systemPrompt}
-
-User context:
-The user is about to start the roleplay now.
-`.trim();
-
-    const injected = [{ role: "system", content: starterSystem }];
-
-    const data = await sendChat(provider, injected);
-    return (data.reply || "").trim();
-  }
-
-  // ✅ Step 3: scenario reset effect (robust)
+  // When scenario changes OR assistantStarts/provider changes => reset conversation
   useEffect(() => {
     if (!scenario) return;
 
     let cancelled = false;
 
-    async function resetScenario() {
+    async function resetScenarioConversation() {
       setError("");
       setInput("");
 
+      // Start fresh with only the system prompt coming from backend (already translated + enforced)
       const base = [{ role: "system", content: scenario.systemPrompt }];
 
-      // If assistant starts, generate the first line in the user's target language
-      if (assistantStarts) {
-        setLoading(true);
-        try {
-          const first = await generateAssistantStarter(scenario);
-          if (!cancelled) {
-            setMessages([...base, { role: "assistant", content: first }]);
-          }
-        } catch (e) {
-          if (!cancelled) {
-            setMessages(base);
-            setError(e?.message || "Failed to start roleplay");
-          }
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
+      if (!assistantStarts) {
+        setMessages(base);
         return;
       }
 
-      setMessages(base);
+      setLoading(true);
+      try {
+        // Kick off the roleplay with a first assistant message, guaranteed in target language
+        const kickoff = [
+          ...base,
+          {
+            role: "user",
+            content: "Start the roleplay now. Begin naturally in character with a short message.",
+          },
+        ];
+
+        const data = await sendChat(provider, kickoff);
+        const first = (data.reply || "").trim();
+
+        if (!cancelled) {
+          setMessages([...base, { role: "assistant", content: first }]);
+        }
+      } catch (e) {
+        const msg = e?.message || "Failed to start roleplay";
+        if (!cancelled) {
+          setMessages(base);
+          setError(msg);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
 
-    resetScenario();
+    resetScenarioConversation();
     return () => {
       cancelled = true;
     };
-  }, [scenario, assistantStarts, provider]); // ✅ exactly as instructed
+  }, [scenario, assistantStarts, provider]);
 
-  const visibleMessages = useMemo(
-    () => messages.filter((m) => m.role !== "system"),
-    [messages]
-  );
+  const visibleMessages = useMemo(() => messages.filter((m) => m.role !== "system"), [messages]);
 
-  function newScenario() {
-    const next = pickScenarioForLanguage(targetLanguage, scenario?.id);
-    setScenario(next);
+  async function handleScenarioChange(e) {
+    const id = e.target.value;
+    setSelectedScenarioId(id);
+    await loadAndPrepareScenario(id);
+  }
+
+  async function newScenario() {
+    if (!scenarioList?.length) return;
+    const candidates = scenarioList.filter((s) => s.id !== selectedScenarioId);
+    const next = (candidates.length ? pickRandom(candidates) : pickRandom(scenarioList)) || null;
+    if (!next?.id) return;
+
+    setSelectedScenarioId(next.id);
+    await loadAndPrepareScenario(next.id);
   }
 
   async function handleSend(e) {
@@ -347,7 +343,9 @@ The user is about to start the roleplay now.
     }
   }
 
-  if (!scenario) return <p>Loading roleplay…</p>;
+  const scenarioStub = scenarioList.find((s) => s.id === selectedScenarioId);
+
+  if (!isLoggedIn()) return null;
 
   return (
     <div style={{ maxWidth: 800 }}>
@@ -355,17 +353,18 @@ The user is about to start the roleplay now.
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div>
-          Scenario: <b>{scenario.title}</b>{" "}
+          Scenario:{" "}
+          <b>{scenario?.title || scenarioStub?.title || (loadingScenario ? "Loading..." : "—")}</b>{" "}
           <span style={{ opacity: 0.7 }}>({targetLanguage})</span>
         </div>
 
-        <button type="button" onClick={newScenario} disabled={loading}>
+        <button type="button" onClick={newScenario} disabled={loading || loadingScenario || !scenarioList.length}>
           New scenario
         </button>
 
         <label>
           Provider{" "}
-          <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+          <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={loading}>
             <option value="openai">OpenAI</option>
             <option value="llama3">Llama 3 (local)</option>
           </select>
@@ -374,25 +373,45 @@ The user is about to start the roleplay now.
         <button
           type="button"
           onClick={() => {
-            // Reset current scenario conversation (keep same scenario)
+            // Reset current scenario conversation (keep same scenario object)
             setScenario((prev) => (prev ? { ...prev } : prev));
           }}
-          disabled={loading}
+          disabled={loading || loadingScenario || !scenario}
         >
           Reset
         </button>
       </div>
 
-      <div style={{ marginTop: 10, opacity: 0.9 }}>
-        <p style={{ margin: "8px 0" }}>{scenario.description}</p>
+      <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <label>
+          Choose scenario{" "}
+          <select
+            value={selectedScenarioId}
+            onChange={handleScenarioChange}
+            disabled={loadingScenario || loading || !scenarioList.length}
+          >
+            {scenarioList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+        </label>
 
-        {scenario.starterUser ? (
+        {loadingScenario ? <span style={{ opacity: 0.7 }}>Preparing in {targetLanguage}…</span> : null}
+      </div>
+
+      <div style={{ marginTop: 10, opacity: 0.9 }}>
+        <p style={{ margin: "8px 0" }}>{scenario?.description || scenarioStub?.description || ""}</p>
+
+        {scenario?.starterUser ? (
           <p style={{ margin: "8px 0" }}>
             Suggested start: <i>{scenario.starterUser}</i>{" "}
             <button
               type="button"
               onClick={() => setInput(scenario.starterUser)}
               style={{ marginLeft: 8 }}
+              disabled={loading || loadingScenario}
             >
               Use
             </button>
@@ -405,6 +424,7 @@ The user is about to start the roleplay now.
           type="checkbox"
           checked={assistantStarts}
           onChange={(e) => setAssistantStarts(e.target.checked)}
+          disabled={loadingScenario}
         />
         Assistant starts
       </label>
@@ -412,7 +432,7 @@ The user is about to start the roleplay now.
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
         <label>
           Voice{" "}
-          <select value={voice} onChange={(e) => setVoice(e.target.value)}>
+          <select value={voice} onChange={(e) => setVoice(e.target.value)} disabled={loadingScenario}>
             <option value="coral">coral</option>
             <option value="alloy">alloy</option>
             <option value="nova">nova</option>
@@ -422,13 +442,13 @@ The user is about to start the roleplay now.
           </select>
         </label>
 
-        <button type="button" onClick={recording ? stopRecording : startRecording} disabled={sttLoading}>
+        <button type="button" onClick={recording ? stopRecording : startRecording} disabled={sttLoading || loadingScenario}>
           {sttLoading ? "Transcribing..." : recording ? "Stop recording" : "Start recording"}
         </button>
 
         <button
           type="button"
-          disabled={speaking}
+          disabled={speaking || loadingScenario}
           onClick={() => {
             const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
             speak(lastAssistant?.content || "");
@@ -451,7 +471,11 @@ The user is about to start the roleplay now.
         }}
       >
         {visibleMessages.length === 0 ? (
-          <p style={{ opacity: 0.7 }}>Start the conversation (e.g., “Hello! I need…”)</p>
+          <p style={{ opacity: 0.7 }}>
+            {loadingScenario
+              ? "Preparing roleplay…"
+              : "Start the conversation (e.g., “Hello! I need…”) or use the suggested start."}
+          </p>
         ) : (
           visibleMessages.map((m, i) => (
             <div key={i} style={{ marginBottom: 12 }}>
@@ -470,9 +494,9 @@ The user is about to start the roleplay now.
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your message…"
           style={{ flex: 1, padding: 10 }}
-          disabled={loading}
+          disabled={loading || loadingScenario}
         />
-        <button type="submit" disabled={loading || !input.trim()}>
+        <button type="submit" disabled={loading || loadingScenario || !input.trim() || !scenario}>
           {loading ? "Sending..." : "Send"}
         </button>
       </form>

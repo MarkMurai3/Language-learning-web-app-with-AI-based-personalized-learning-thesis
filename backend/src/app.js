@@ -10,9 +10,10 @@ const historyRoutes = require("./routes/history.routes");
 const chatRoutes = require("./routes/chat.routes");
 const ttsRoutes = require("./routes/tts.routes");
 const sttRoutes = require("./routes/stt.routes");
-// const sttLocalRoutes = require("./routes/sttLocal.routes");
+const sttLocalRoutes = require("./routes/sttLocal.routes");
 const searchRoutes = require("./routes/search.routes");
 const adminRoutes = require("./routes/admin.routes");
+const roleplayRoutes = require("./routes/roleplay.routes");
 
 
 const app = express();
@@ -31,9 +32,10 @@ app.use("/api/history", historyRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/tts", ttsRoutes);
 app.use("/api/stt", sttRoutes);
-// app.use("/api/stt/local", sttLocalRoutes);
+app.use("/api/stt/local", sttLocalRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/roleplay", roleplayRoutes);
 
 
 

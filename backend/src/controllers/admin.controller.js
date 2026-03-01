@@ -10,7 +10,8 @@ const {
 const { listUsers, setUserDisabled } = require("../services/usersAdmin.service");
 
 async function getUsers(req, res) {
-  return res.json({ users: listUsers() });
+  const users = await listUsers();
+  return res.json({ users });
 }
 
 async function patchUser(req, res) {
@@ -20,7 +21,7 @@ async function patchUser(req, res) {
   if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad user id" });
   if (typeof disabled !== "boolean") return res.status(400).json({ error: "disabled must be boolean" });
 
-  const updated = setUserDisabled(id, disabled);
+  const updated = await setUserDisabled(id, disabled);
   if (!updated) return res.status(404).json({ error: "User not found" });
 
   return res.json({ ok: true, user: updated });

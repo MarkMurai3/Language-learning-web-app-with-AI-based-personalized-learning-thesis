@@ -1,4 +1,4 @@
-// const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "http://localhost:5000/api";
 
 // export async function getHealthStatus() {
 //   const response = await fetch(`${API_BASE_URL}/health`);
@@ -6,7 +6,7 @@
 // }
 
 
-const API_BASE_URL = "https://language-learning-web-app-with-ai-based.onrender.com/api";
+// const API_BASE_URL = "https://language-learning-web-app-with-ai-based.onrender.com/api";
 import { getToken } from "./authStorage";
 
 
@@ -172,23 +172,23 @@ export async function stt(audioBlob) {
 }
 
 
-// export async function sttLocal(audioBlob) {
-//   const token = getToken();
-//   const form = new FormData();
-//   form.append("audio", audioBlob, "speech.webm");
+export async function sttLocal(audioBlob) {
+  const token = getToken();
+  const form = new FormData();
+  form.append("audio", audioBlob, "speech.webm");
 
-//   const res = await fetch("http://localhost:5000/api/stt/local", {
-//     method: "POST",
-//     headers: {
-//       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-//     },
-//     body: form,
-//   });
+  const res = await fetch("http://localhost:5000/api/stt/local", {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  });
 
-//   const data = await res.json().catch(() => ({}));
-//   if (!res.ok) throw new Error(data?.error || "Local STT failed");
-//   return data; // { text }
-// }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "Local STT failed");
+  return data; // { text }
+}
 
 
 export async function searchVideos(q) {
@@ -253,4 +253,12 @@ export async function adminDeleteSeedChannel(language, channelId) {
 
 export async function getFeedback() {
   return request("/feedback");
+}
+
+export async function getRoleplayScenarios() {
+  return request("/roleplay/scenarios");
+}
+
+export async function prepareRoleplayScenario(id) {
+  return request(`/roleplay/scenarios/${encodeURIComponent(id)}/prepare`);
 }

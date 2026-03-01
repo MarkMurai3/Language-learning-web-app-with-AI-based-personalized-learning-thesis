@@ -1,54 +1,32 @@
 const { getUserById, updateUserById } = require("../services/auth.service");
 
-function getProfile(req, res) {
-  const userId = req.user.userId;
-  const user = getUserById(userId);
-
-  if (!user) return res.status(404).json({ error: "User not found" });
-
-  return res.json({ user });
+async function getProfile(req, res) {
+  try {
+    const userId = req.user.userId;
+    const user = await getUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    return res.json({ user });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Failed to load profile" });
+  }
 }
 
-// function updateProfile(req, res) {
-//   const userId = req.user.userId;
+async function updateProfile(req, res) {
+  try {
+    const userId = req.user.userId;
+    const { targetLanguage } = req.body;
 
-// const { targetLanguage } = req.body;
+    const patch = {
+      ...(targetLanguage !== undefined ? { targetLanguage } : {}),
+    };
 
-//   // Only allow updating these fields
-//   const patch = {
-//     // ...(username !== undefined ? { username } : {}),
-//     // ...(nativeLanguage !== undefined ? { nativeLanguage } : {}),
-//     ...(targetLanguage !== undefined ? { targetLanguage } : {}),
-//     // ...(targetLevel !== undefined ? { targetLevel } : {}),
-//   };
+    const updated = await updateUserById(userId, patch);
+    if (!updated) return res.status(404).json({ error: "User not found" });
 
-//   const updated = updateUserById(userId, patch);
-//   if (!updated) return res.status(404).json({ error: "User not found" });
-//   if (targetLanguage !== undefined && String(targetLanguage).trim() === "") {
-//   return res.status(400).json({ error: "targetLanguage cannot be empty" });
-// }
-
-
-//   return res.json({ user: updated });
-// }
-
-function updateProfile(req, res) {
-  const userId = req.user.userId;
-  const { targetLanguage } = req.body;
-
-  const patch = {
-    ...(targetLanguage !== undefined ? { targetLanguage } : {}),
-  };
-
-  const updated = updateUserById(userId, patch);
-  if (!updated) return res.status(404).json({ error: "User not found" });
-
-  return res.json({ user: updated });
+    return res.json({ user: updated });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Failed to update profile" });
+  }
 }
 
-
-
-module.exports = {
-  getProfile,
-  updateProfile,
-};
+module.exports = { getProfile, updateProfile };
