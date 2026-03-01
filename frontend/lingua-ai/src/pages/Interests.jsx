@@ -15,6 +15,7 @@ export default function Interests() {
 
   // selected = [{ id, weight }]
   const [selected, setSelected] = useState([]);
+  const canSave = selected.length > 0;
 
   const [prefs, setPrefs] = useState({ avoidLearningContent: false });
 
@@ -237,11 +238,19 @@ export default function Interests() {
           : selected.map((x) => (x.weight === 2 ? `⭐ ${x.id}` : x.id)).join(", ")}
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-        <button onClick={handleSave} disabled={saving}>
+     <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <button
+          onClick={handleSave}
+          disabled={saving || !canSave}
+        >
           {saving ? "Saving..." : "Save interests"}
         </button>
-        <button onClick={() => navigate("/")}>Skip</button>
+
+        {!canSave && (
+          <p style={{ opacity: 0.7 }}>
+            Select at least one interest to continue.
+          </p>
+        )}
       </div>
     </div>
   );

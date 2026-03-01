@@ -5,6 +5,7 @@ import { saveAuth } from "../services/authStorage";
 
 export default function Login() {
   const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -18,8 +19,13 @@ export default function Login() {
 
     try {
       const { user, token } = await loginApi(email, password);
+
+      // Save token + user
       saveAuth(token, user);
-      navigate("/interests");
+
+      // ✅ Redirect to HOME (not interests!)
+      navigate("/", { replace: true });
+
     } catch (err) {
       setError(err.message || "Login failed");
     } finally {
@@ -31,7 +37,10 @@ export default function Login() {
     <div>
       <h1>Login</h1>
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10, maxWidth: 320 }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "grid", gap: 10, maxWidth: 320 }}
+      >
         <label>
           Email
           <input

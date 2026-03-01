@@ -1,7 +1,7 @@
 // frontend/src/pages/Roleplay.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendChat, tts, stt, getRoleplayScenarios, prepareRoleplayScenario, getMe } from "../services/api";
+import { sendChat, tts, stt, sttLocal, getRoleplayScenarios, prepareRoleplayScenario, getMe } from "../services/api";
 import { isLoggedIn, clearAuth, getUser } from "../services/authStorage";
 /**
  * Reads token from localStorage. Adjust the key if your project stores it differently.
@@ -53,6 +53,7 @@ export default function Roleplay() {
 
   const [provider, setProvider] = useState("openai");
   const [targetLanguage, setTargetLanguage] = useState("English");
+  const [sttMode, setSttMode] = useState("openai"); // "openai" | "local"
 
   // list of scenario "stubs" from backend: [{id,title,description}]
   const [scenarioList, setScenarioList] = useState([]);
@@ -312,7 +313,7 @@ export default function Roleplay() {
           setSttLoading(true);
           const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
 
-          const data = await stt(audioBlob);
+          const data = sttMode === "local" ? await sttLocal(audioBlob) : await stt(audioBlob);
           const text = (data.text || "").trim();
 
           if (text) setInput(text);
@@ -427,6 +428,18 @@ export default function Roleplay() {
           disabled={loadingScenario}
         />
         Assistant starts
+      </label>
+
+      <label>
+        STT{" "}
+        <select
+          value={sttMode}
+          onChange={(e) => setSttMode(e.target.value)}
+          disabled={sttLoading || recording || loadingScenario}
+        >
+          <option value="openai">OpenAI (cloud)</option>
+          <option value="local">Local (whisper.cpp)</option>
+        </select>
       </label>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
