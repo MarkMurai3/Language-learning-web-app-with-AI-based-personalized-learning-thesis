@@ -14,6 +14,8 @@ const sttLocalRoutes = require("./routes/sttLocal.routes");
 const searchRoutes = require("./routes/search.routes");
 const adminRoutes = require("./routes/admin.routes");
 const roleplayRoutes = require("./routes/roleplay.routes");
+const languagesRoutes = require("./routes/languages.routes");
+
 
 
 const app = express();
@@ -36,7 +38,7 @@ app.use("/api/stt/local", sttLocalRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/roleplay", roleplayRoutes);
-
+app.use("/api/languages", languagesRoutes);
 
 
 // Temporary test route

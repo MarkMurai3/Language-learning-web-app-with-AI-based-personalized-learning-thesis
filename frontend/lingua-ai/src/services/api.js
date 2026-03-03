@@ -262,3 +262,7 @@ export async function getRoleplayScenarios() {
 export async function prepareRoleplayScenario(id) {
   return request(`/roleplay/scenarios/${encodeURIComponent(id)}/prepare`);
 }
+
+export async function getLanguages() {
+  return request("/languages");
+}

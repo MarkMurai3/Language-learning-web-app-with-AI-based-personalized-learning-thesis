@@ -255,7 +255,7 @@ async function buildRecommendations(jwtUser) {
     extractKeywordsFromInterestId(interests?.[0]?.id)?.[0] || "";
 
   // seed lane
-  const seeds = getSeedChannelsForLanguage(targetLanguage);
+  const seeds = await getSeedChannelsForLanguage({ language: targetLanguage, userId: jwtUser.userId });  
   const seedIds = await collectIdsFromSeedChannels({
     apiKey,
     seeds,
@@ -318,8 +318,7 @@ async function buildRecommendations(jwtUser) {
     if (!sn) continue;
 
     if (dislikedSet.has(String(v.id))) continue;
-    if (isBlocked(String(v.id))) continue;
-
+    if (await isBlocked({ videoId: sid, userId: jwtUser.userId })) continue;
     const okLang = passesLanguageFilter({
       targetYt,
       targetFranc,

@@ -62,5 +62,8 @@ const MAP = {
 function getLangCodes(name) {
   return MAP[name] || { yt: "en", franc: "eng" };
 }
+function listLanguageNames() {
+  return Object.keys(MAP);
+}
 
-module.exports = { getLangCodes };
+module.exports = { getLangCodes, listLanguageNames };

@@ -1,6 +1,7 @@
+// frontend/src/pages/Admin.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getMe } from "../services/api";
+import { getMe, getLanguages } from "../services/api";
 import { clearAuth, isLoggedIn } from "../services/authStorage";
 
 import {
@@ -24,6 +25,12 @@ export default function Admin() {
   // users
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
+
+  // languages
+  const [languages, setLanguages] = useState([]);
+
+  // scope (global vs per-user)
+  const [scopeUserId, setScopeUserId] = useState(""); // "" means global
 
   // blocked
   const [blocked, setBlocked] = useState([]);
@@ -52,13 +59,23 @@ export default function Admin() {
 
         if (u?.role !== "admin") {
           navigate("/");
+          return;
         }
+
+        // load languages once after auth
+        getLanguages()
+          .then((d) => setLanguages(d.languages || []))
+          .catch(() => {});
       })
       .catch(() => {
         clearAuth();
         navigate("/login");
       });
   }, [navigate]);
+
+  function scopeArg() {
+    return scopeUserId ? Number(scopeUserId) : undefined;
+  }
 
   // ---- loaders ----
   async function loadUsers() {
@@ -78,7 +95,7 @@ export default function Admin() {
     setError("");
     setBlockedLoading(true);
     try {
-      const data = await adminGetBlockedVideos();
+      const data = await adminGetBlockedVideos(scopeArg());
       setBlocked(data.items || []);
     } catch (e) {
       setError(e.message || "Failed to load blocked videos");
@@ -91,7 +108,7 @@ export default function Admin() {
     setError("");
     setSeedsLoading(true);
     try {
-      const data = await adminGetSeedChannels();
+      const data = await adminGetSeedChannels(scopeArg());
       setSeeds(data.items || []);
     } catch (e) {
       setError(e.message || "Failed to load seed channels");
@@ -100,7 +117,7 @@ export default function Admin() {
     }
   }
 
-  // load active tab
+  // load active tab (also reload when scope changes)
   useEffect(() => {
     if (!me) return;
     if (me.role !== "admin") return;
@@ -109,7 +126,7 @@ export default function Admin() {
     if (tab === "blocked") loadBlocked();
     if (tab === "seeds") loadSeeds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, me]);
+  }, [tab, me, scopeUserId]);
 
   if (!me) return <p>Checking admin access...</p>;
 
@@ -133,6 +150,28 @@ export default function Admin() {
       </div>
 
       {error && <p style={{ color: "crimson" }}>{error}</p>}
+
+      {/* Apply scope (global vs specific user) */}
+      <div style={{ margin: "10px 0 16px 0" }}>
+        <label>
+          Apply to{" "}
+          <select
+            value={scopeUserId}
+            onChange={(e) => setScopeUserId(e.target.value)}
+            disabled={usersLoading && tab !== "users"}
+          >
+            <option value="">All users (global)</option>
+            {users.map((u) => (
+              <option key={u.id} value={String(u.id)}>
+                #{u.id} {u.email}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span style={{ marginLeft: 10, opacity: 0.75, fontSize: 13 }}>
+          (Blocked videos + seed channels will be scoped)
+        </span>
+      </div>
 
       {tab === "users" && (
         <section style={{ border: "1px solid #444", padding: 12, borderRadius: 10 }}>
@@ -199,7 +238,7 @@ export default function Admin() {
               if (!vid) return;
 
               try {
-                await adminAddBlockedVideo(vid, blockReason.trim());
+                await adminAddBlockedVideo(vid, blockReason.trim(), scopeArg());
                 setBlockVideoId("");
                 setBlockReason("");
                 await loadBlocked();
@@ -221,7 +260,9 @@ export default function Admin() {
               placeholder="Reason (optional)"
               style={{ flex: 1, minWidth: 220, padding: 10 }}
             />
-            <button type="submit">Block</button>
+            <button type="submit" disabled={blockedLoading}>
+              Block
+            </button>
           </form>
 
           {blockedLoading ? (
@@ -256,7 +297,7 @@ export default function Admin() {
                     onClick={async () => {
                       setError("");
                       try {
-                        await adminDeleteBlockedVideo(b.videoId);
+                        await adminDeleteBlockedVideo(b.videoId, scopeArg());
                         await loadBlocked();
                       } catch (e) {
                         setError(e.message || "Delete failed");
@@ -285,7 +326,12 @@ export default function Admin() {
               if (!ch) return;
 
               try {
-                await adminAddSeedChannel(seedLanguage, ch, seedLabel.trim());
+                await adminAddSeedChannel(
+                  seedLanguage,
+                  ch,
+                  seedLabel.trim(),
+                  scopeArg()
+                );
                 setSeedChannelId("");
                 setSeedLabel("");
                 await loadSeeds();
@@ -296,12 +342,11 @@ export default function Admin() {
             style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}
           >
             <select value={seedLanguage} onChange={(e) => setSeedLanguage(e.target.value)}>
-              <option>English</option>
-              <option>French</option>
-              <option>Spanish</option>
-              <option>Italian</option>
-              <option>German</option>
-              <option>Hungarian</option>
+              {(languages.length ? languages : ["English"]).map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
             </select>
 
             <input
@@ -318,7 +363,9 @@ export default function Admin() {
               style={{ flex: 1, minWidth: 220, padding: 10 }}
             />
 
-            <button type="submit">Add seed</button>
+            <button type="submit" disabled={seedsLoading}>
+              Add seed
+            </button>
           </form>
 
           {seedsLoading ? (
@@ -353,7 +400,7 @@ export default function Admin() {
                     onClick={async () => {
                       setError("");
                       try {
-                        await adminDeleteSeedChannel(s.language, s.channelId);
+                        await adminDeleteSeedChannel(s.language, s.channelId, scopeArg());
                         await loadSeeds();
                       } catch (e) {
                         setError(e.message || "Delete failed");
