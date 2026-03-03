@@ -1,3 +1,4 @@
+// backend/src/services/recommendation.service.js
 const franc = require("franc");
 const { getHints } = require("./langHints");
 
@@ -6,17 +7,32 @@ const { getUserById } = require("./auth.service");
 const { ytSearch, ytVideosDetails } = require("./youtube.service");
 const { getLangCodes } = require("./languageMap");
 const { translateToTarget } = require("./translate.service");
-const queryTranslateCache = new Map(); // key: `${targetLanguage}::${text}`
 
 // admin rules
 const { isBlocked, getSeedChannelsForLanguage } = require("./admin.service");
 
-// OPTIONAL: feedback (dislikes)
+// OPTIONAL: feedback (dislikes/likes)
 let getFeedback;
 try {
   ({ getFeedback } = require("./feedback.service"));
 } catch {
   getFeedback = null;
+}
+
+/* ================= caches ================= */
+
+// query translation cache
+const queryTranslateCache = new Map(); // key: `${targetLanguage}::${text}`
+
+// ✅ recommendations cache (final list)
+const recCache = new Map();
+// key: `${userId}::${targetLanguage}::${stableKey({ interests, prefs })}`
+// value: { expiresAt, items }
+const REC_TTL_MS = 1000 * 60 * 20; // 20 min
+
+function stableKey(obj) {
+  // simple stable stringify by sorting top-level keys
+  return JSON.stringify(obj, Object.keys(obj).sort());
 }
 
 /* ================= helpers ================= */
@@ -52,12 +68,12 @@ function passesLanguageFilter({ targetYt, targetFranc, videoSnippet }) {
 
   const detected = detectTextLanguageISO3(`${title}\n${description}`);
 
-  // ✅ Key change: unknown language is NOT OK for non-English targets
+  // unknown language is NOT OK for non-English targets
   if (detected === "und") {
     return targetFranc === "eng"; // allow only if target is English
   }
 
-  // ✅ Prevent English leaking into non-English targets
+  // Prevent English leaking into non-English targets
   if (targetFranc !== "eng" && detected === "eng") return false;
 
   return detected === targetFranc;
@@ -67,26 +83,6 @@ function containsAny(text, words) {
   const t = (text || "").toLowerCase();
   return (words || []).some((w) => t.includes(String(w).toLowerCase()));
 }
-
-// function makeQueries(interests, targetLanguageName) {
-//   const hints = getHints(targetLanguageName);
-
-//   const nativeQueries = [];
-//   const learningQueries = [];
-
-//   for (const interest of interests.slice(0, 4)) {
-//     const translated = hints.interestMap?.[interest];
-//     const keywords =
-//       Array.isArray(translated) && translated.length ? translated : [interest];
-
-//     for (const kw of keywords) nativeQueries.push(String(kw));
-
-//     learningQueries.push(`${interest} ${targetLanguageName}`);
-//     learningQueries.push(`${interest} in ${targetLanguageName}`);
-//   }
-
-//   return { nativeQueries, learningQueries, hints };
-// }
 
 function extractKeywordsFromInterestId(id) {
   const s = String(id || "").trim();
@@ -115,7 +111,7 @@ function buildQueriesFromInterests(interests, targetLanguageName) {
   const nativeQueries = [];
   const learningQueries = [];
 
-  for (const it of (interests || [])) {
+  for (const it of interests || []) {
     const weight = it?.weight === 2 ? 2 : 1;
     const kws = extractKeywordsFromInterestId(it?.id);
 
@@ -127,14 +123,23 @@ function buildQueriesFromInterests(interests, targetLanguageName) {
       learningQueries.push(`${kw} ${targetLanguageName}`);
       learningQueries.push(`${kw} in ${targetLanguageName}`);
       learningQueries.push(`learn ${kw} ${targetLanguageName}`);
-
     }
   }
 
   return { nativeQueries, learningQueries, hints };
 }
 
-async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet }) {
+async function isBlockedForUser(videoId, userId) {
+  // Make admin.service usage consistent everywhere
+  try {
+    return await isBlocked({ videoId: String(videoId), userId });
+  } catch {
+    // if admin.service throws, fail open (do not block)
+    return false;
+  }
+}
+
+async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet, userId }) {
   const ids = [];
 
   for (const q of queries) {
@@ -151,7 +156,7 @@ async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet })
 
       const sid = String(id);
       if (dislikedSet.has(sid)) continue;
-      if (isBlocked(sid)) continue;
+      if (await isBlockedForUser(sid, userId)) continue;
 
       ids.push(id);
     }
@@ -160,13 +165,7 @@ async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet })
   return ids;
 }
 
-async function collectIdsFromSeedChannels({
-  apiKey,
-  seeds,
-  q,
-  targetYt,
-  dislikedSet,
-}) {
+async function collectIdsFromSeedChannels({ apiKey, seeds, q, targetYt, dislikedSet, userId }) {
   const ids = [];
 
   for (const s of (seeds || []).slice(0, 5)) {
@@ -184,7 +183,7 @@ async function collectIdsFromSeedChannels({
 
       const sid = String(id);
       if (dislikedSet.has(sid)) continue;
-      if (isBlocked(sid)) continue;
+      if (await isBlockedForUser(sid, userId)) continue;
 
       ids.push(id);
     }
@@ -197,19 +196,29 @@ async function collectIdsFromSeedChannels({
 
 async function buildRecommendations(jwtUser) {
   const apiKey = process.env.YOUTUBE_API_KEY;
-  
   if (!apiKey) throw new Error("Missing YOUTUBE_API_KEY");
-  
+
   const { interests, prefs } = await getInterestsForUser(jwtUser.userId);
   if (!interests || interests.length === 0) return [];
 
   const profile = await getUserById(jwtUser.userId);
 
-
   const targetLanguage = profile?.targetLanguage || "English";
   const { yt: targetYt, franc: targetFranc } = getLangCodes(targetLanguage);
 
-  // disliked videos
+  // ✅ CACHE HIT (right after interests/prefs/profile/targetLanguage known)
+  const cacheKey = `${jwtUser.userId}::${targetLanguage}::${stableKey({
+    interests,
+    prefs,
+  })}`;
+  const now = Date.now();
+  const hit = recCache.get(cacheKey);
+
+  if (hit && hit.expiresAt > now) {
+    return hit.items;
+  }
+
+  // feedback sets
   let dislikedSet = new Set();
   let likedSet = new Set();
 
@@ -221,8 +230,8 @@ async function buildRecommendations(jwtUser) {
     } catch {}
   }
 
+  // liked channels boost
   let likedChannelIds = new Set();
-
   if (likedSet.size > 0) {
     try {
       const likedIds = Array.from(likedSet).slice(0, 25); // limit cost
@@ -237,12 +246,15 @@ async function buildRecommendations(jwtUser) {
   }
 
   // queries
-  const { nativeQueries, learningQueries, hints } =
-    buildQueriesFromInterests(interests, targetLanguage);
+  const { nativeQueries, learningQueries, hints } = buildQueriesFromInterests(
+    interests,
+    targetLanguage
+  );
 
-  // ✅ Translate native queries into target language to bias results toward native content
+  // Translate native queries into target language to bias results toward native content
   const translatedNativeQueries = [];
-  for (const q of nativeQueries.slice(0, 12)) { // cap to control cost
+  for (const q of nativeQueries.slice(0, 12)) {
+    // cap to control cost
     try {
       translatedNativeQueries.push(await translateQueryCached(q, targetLanguage));
     } catch {
@@ -250,18 +262,22 @@ async function buildRecommendations(jwtUser) {
     }
   }
 
-  // ✅ FIX: firstKeyword for seed search (avoid [object Object])
-  const firstKeyword =
-    extractKeywordsFromInterestId(interests?.[0]?.id)?.[0] || "";
+  // first keyword for seed search
+  const firstKeyword = extractKeywordsFromInterestId(interests?.[0]?.id)?.[0] || "";
 
   // seed lane
-  const seeds = await getSeedChannelsForLanguage({ language: targetLanguage, userId: jwtUser.userId });  
+  const seeds = await getSeedChannelsForLanguage({
+    language: targetLanguage,
+    userId: jwtUser.userId,
+  });
+
   const seedIds = await collectIdsFromSeedChannels({
     apiKey,
     seeds,
     q: firstKeyword,
     targetYt,
     dislikedSet,
+    userId: jwtUser.userId,
   });
 
   // native + learning lanes
@@ -270,6 +286,7 @@ async function buildRecommendations(jwtUser) {
     queries: translatedNativeQueries,
     targetYt,
     dislikedSet,
+    userId: jwtUser.userId,
   });
 
   let learningIds = [];
@@ -279,29 +296,34 @@ async function buildRecommendations(jwtUser) {
       queries: learningQueries,
       targetYt,
       dislikedSet,
+      userId: jwtUser.userId,
     });
   }
+
   // merge (seed > native > learning)
   const uniqueIds = [];
   const seen = new Set();
 
   for (const id of seedIds) {
-    if (seen.has(id)) continue;
-    seen.add(id);
+    const sid = String(id);
+    if (seen.has(sid)) continue;
+    seen.add(sid);
     uniqueIds.push(id);
     if (uniqueIds.length >= 15) break;
   }
 
   for (const id of nativeIds) {
-    if (seen.has(id)) continue;
-    seen.add(id);
+    const sid = String(id);
+    if (seen.has(sid)) continue;
+    seen.add(sid);
     uniqueIds.push(id);
     if (uniqueIds.length >= 35) break;
   }
 
   for (const id of learningIds) {
-    if (seen.has(id)) continue;
-    seen.add(id);
+    const sid = String(id);
+    if (seen.has(sid)) continue;
+    seen.add(sid);
     uniqueIds.push(id);
     if (uniqueIds.length >= 50) break;
   }
@@ -317,8 +339,10 @@ async function buildRecommendations(jwtUser) {
     const sn = v?.snippet;
     if (!sn) continue;
 
-    if (dislikedSet.has(String(v.id))) continue;
-    if (await isBlocked({ videoId: sid, userId: jwtUser.userId })) continue;
+    const vid = String(v.id);
+    if (dislikedSet.has(vid)) continue;
+    if (await isBlockedForUser(vid, jwtUser.userId)) continue;
+
     const okLang = passesLanguageFilter({
       targetYt,
       targetFranc,
@@ -331,12 +355,12 @@ async function buildRecommendations(jwtUser) {
 
     const isLearning = containsAny(`${title}\n${description}`, hints.learnStop);
 
-    // ✅ if user says "avoid learning content", hard filter it out
+    // hard filter learning content if preference says so
     if (prefs?.avoidLearningContent && isLearning) continue;
 
     let score = isLearning ? 0 : 10;
 
-    // ✅ boost if user liked this channel before
+    // boost if user liked this channel before
     const chId = sn.channelId ? String(sn.channelId) : "";
     if (chId && likedChannelIds.has(chId)) score += 5;
 
@@ -345,8 +369,7 @@ async function buildRecommendations(jwtUser) {
       title,
       channel: sn.channelTitle || "",
       url: `https://www.youtube.com/watch?v=${v.id}`,
-      thumbnail:
-        sn.thumbnails?.medium?.url || sn.thumbnails?.high?.url || "",
+      thumbnail: sn.thumbnails?.medium?.url || sn.thumbnails?.high?.url || "",
       language: targetLanguage,
       reason: isLearning ? "Learning content" : "Native content",
       _score: score,
@@ -354,8 +377,15 @@ async function buildRecommendations(jwtUser) {
   }
 
   out.sort((a, b) => (b._score || 0) - (a._score || 0));
-  return out.slice(0, 20).map(({ _score, ...rest }) => rest);
+
+  // ✅ CACHE SET right before returning
+  const finalItems = out.slice(0, 20).map(({ _score, ...rest }) => rest);
+  recCache.set(cacheKey, {
+    expiresAt: Date.now() + REC_TTL_MS,
+    items: finalItems,
+  });
+
+  return finalItems;
 }
 
 module.exports = { buildRecommendations };
-
