@@ -22,10 +22,11 @@ const { getUserById } = require("../services/auth.service");
 
 const router = express.Router();
 
-router.get("/me", requireAuth, (req, res) => {
-  const user = getUserById(req.user.userId);
+router.get("/me", requireAuth, async (req, res) => {
+  const user = await getUserById(req.user.userId);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
-  return res.json({ user }); // ✅ includes role + disabled + targetLanguage
+  return res.json({ user });
 });
 
 module.exports = router;
+

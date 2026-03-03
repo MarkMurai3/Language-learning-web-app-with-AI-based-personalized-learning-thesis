@@ -9,9 +9,12 @@ const {
 
 const { listUsers, setUserDisabled } = require("../services/usersAdmin.service");
 
+// async function getUsers(req, res) {
+//   const users = await listUsers();
+//   return res.json({ users });
+// }
 async function getUsers(req, res) {
-  const users = await listUsers();
-  return res.json({ users });
+  return res.json({ users: await listUsers() });
 }
 
 async function patchUser(req, res) {
