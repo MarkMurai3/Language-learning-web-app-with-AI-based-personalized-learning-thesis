@@ -24,6 +24,8 @@ function detectTextLanguageISO3(text) {
   return franc(t, { minLength: 20 });
 }
 
+
+
 function passesLanguageFilter({ targetYt, targetFranc, videoSnippet }) {
   const title = videoSnippet?.title || "";
   const description = videoSnippet?.description || "";

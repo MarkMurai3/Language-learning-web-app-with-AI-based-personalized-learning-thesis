@@ -11,6 +11,7 @@ import Chat from "./pages/Chat";
 import NotesWidget from "./components/NotesWidget";
 import Admin from "./pages/Admin";
 import Roleplay from "./pages/Roleplay";
+import Story from "./pages/Story";
 
 
 
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/history" element={<History />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/story" element={<Story />} />
           <Route path="/roleplay" element={<Roleplay />} />
           <Route path="/admin" element={<Admin />} />
 

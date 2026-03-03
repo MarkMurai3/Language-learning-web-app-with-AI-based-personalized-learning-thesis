@@ -5,8 +5,14 @@ import { isLoggedIn, clearAuth } from "../services/authStorage";
 
 
 
-const SYSTEM_PROMPT =
-  "You are a helpful language learner. Answer their questions in the language they ask you a question. Apply the natural approach when answering their linguistic questions.";
+const SYSTEM_PROMPT = `
+You are a language immersion tutor using the Natural Approach.
+Rules:
+- Always reply in the SAME language the user is practicing (infer from the conversation).
+- Keep replies short, natural, and helpful.
+- Prefer examples and rephrasing over tests.
+- Only correct mistakes if the user asks, and do it gently.
+`.trim();
 
 export default function Chat() {
   const navigate = useNavigate();
@@ -81,7 +87,48 @@ export default function Chat() {
     }
   }
 
-  
+  async function transformLastAssistant(mode) {
+  setError("");
+  if (loading) return;
+
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  if (!lastAssistant) return;
+
+  const instructionByMode = {
+    simplify:
+      "Simplify your last message. Use easier words and shorter sentences. Keep the same language. Keep the meaning.",
+    rephrase:
+      "Say your last message another way. Keep the same meaning. Keep the same language. Keep it natural.",
+    explain:
+      "Briefly explain WHY you said it that way (grammar/word choice) in 2-4 short bullet points. Keep the same language.",
+  };
+
+  const instruction = instructionByMode[mode];
+  if (!instruction) return;
+
+  setLoading(true);
+  try {
+    const nextMessages = [
+      ...messages,
+      { role: "user", content: instruction },
+    ];
+
+    const data = await sendChat(provider, nextMessages);
+    const reply = (data.reply || "").trim();
+
+    setMessages([...nextMessages, { role: "assistant", content: reply }]);
+  } catch (err) {
+    const msg = err.message || "Action failed";
+    if (msg.toLowerCase().includes("token")) {
+      clearAuth();
+      navigate("/login");
+      return;
+    }
+    setError(msg);
+  } finally {
+    setLoading(false);
+  }
+}
 
   function handleReset() {
     setMessages([{ role: "system", content: SYSTEM_PROMPT }]);
@@ -131,8 +178,7 @@ async function startRecording() {
         setSttLoading(true);
         const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
 
-        const data = await stt(audioBlob);
-        // const data = sttProvider === "local" ? await sttLocal(audioBlob) : await stt(audioBlob);
+        const data = sttProvider === "local" ? await sttLocal(audioBlob) : await stt(audioBlob);        // const data = sttProvider === "local" ? await sttLocal(audioBlob) : await stt(audioBlob);
         const text = (data.text || "").trim();
 
         if (text) {
@@ -222,6 +268,18 @@ function stopRecording() {
             <option value="local">Whisper (local)</option>
           </select>
         </label>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+          <button type="button" disabled={loading} onClick={() => transformLastAssistant("simplify")}>
+            Simplify last reply
+          </button>
+          <button type="button" disabled={loading} onClick={() => transformLastAssistant("rephrase")}>
+            Say it another way
+          </button>
+          <button type="button" disabled={loading} onClick={() => transformLastAssistant("explain")}>
+            Explain briefly
+          </button>
+        </div>
 
         <button type="button" onClick={handleReset}>
           Reset chat

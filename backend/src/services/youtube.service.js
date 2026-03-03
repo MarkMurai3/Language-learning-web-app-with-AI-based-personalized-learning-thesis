@@ -8,7 +8,7 @@ const MIN_SEARCH_INTERVAL_MS = 1500; // 1.5 seconds
 
 
 
-async function ytSearch({ apiKey, q, relevanceLanguage, maxResults = 10, ttlMs = DEFAULT_TTL_MS }) {
+async function ytSearch({ apiKey, q, relevanceLanguage, hl, maxResults = 10, ttlMs = DEFAULT_TTL_MS }) {
   const key = JSON.stringify({ q, relevanceLanguage, maxResults });
 
   const now = Date.now();
@@ -23,6 +23,8 @@ async function ytSearch({ apiKey, q, relevanceLanguage, maxResults = 10, ttlMs =
   url.searchParams.set("maxResults", String(maxResults));
   url.searchParams.set("q", q);
   if (relevanceLanguage) url.searchParams.set("relevanceLanguage", relevanceLanguage);
+  if (hl) url.searchParams.set("hl", hl);
+
   url.searchParams.set("key", apiKey);
 
   const now2 = Date.now();

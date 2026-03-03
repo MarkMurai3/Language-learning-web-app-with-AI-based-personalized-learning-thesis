@@ -5,8 +5,10 @@ const { getInterestsForUser } = require("./interests.service");
 const { getUserById } = require("./auth.service");
 const { ytSearch, ytVideosDetails } = require("./youtube.service");
 const { getLangCodes } = require("./languageMap");
+const { translateToTarget } = require("./translate.service");
+const queryTranslateCache = new Map(); // key: `${targetLanguage}::${text}`
 
-// ✅ admin rules
+// admin rules
 const { isBlocked, getSeedChannelsForLanguage } = require("./admin.service");
 
 // OPTIONAL: feedback (dislikes)
@@ -29,6 +31,14 @@ function detectTextLanguageISO3(text) {
   return franc(t, { minLength: 20 });
 }
 
+async function translateQueryCached(text, targetLanguage) {
+  const key = `${targetLanguage}::${text}`;
+  if (queryTranslateCache.has(key)) return queryTranslateCache.get(key);
+  const t = await translateToTarget({ text, targetLanguage });
+  queryTranslateCache.set(key, t);
+  return t;
+}
+
 function passesLanguageFilter({ targetYt, targetFranc, videoSnippet }) {
   const title = videoSnippet?.title || "";
   const description = videoSnippet?.description || "";
@@ -36,13 +46,18 @@ function passesLanguageFilter({ targetYt, targetFranc, videoSnippet }) {
   const audioLang = normalizeLangPrefix(videoSnippet?.defaultAudioLanguage);
   const textLang = normalizeLangPrefix(videoSnippet?.defaultLanguage);
 
+  // If YouTube gives explicit language, trust it
   if (audioLang) return audioLang === targetYt;
   if (textLang) return textLang === targetYt;
 
   const detected = detectTextLanguageISO3(`${title}\n${description}`);
 
-  // allow unknown, but prevent obvious English leaking into non-English targets
-  if (detected === "und") return true;
+  // ✅ Key change: unknown language is NOT OK for non-English targets
+  if (detected === "und") {
+    return targetFranc === "eng"; // allow only if target is English
+  }
+
+  // ✅ Prevent English leaking into non-English targets
   if (targetFranc !== "eng" && detected === "eng") return false;
 
   return detected === targetFranc;
@@ -119,7 +134,6 @@ function buildQueriesFromInterests(interests, targetLanguageName) {
   return { nativeQueries, learningQueries, hints };
 }
 
-
 async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet }) {
   const ids = [];
 
@@ -183,6 +197,7 @@ async function collectIdsFromSeedChannels({
 
 async function buildRecommendations(jwtUser) {
   const apiKey = process.env.YOUTUBE_API_KEY;
+  
   if (!apiKey) throw new Error("Missing YOUTUBE_API_KEY");
   
   const { interests, prefs } = await getInterestsForUser(jwtUser.userId);
@@ -225,6 +240,16 @@ async function buildRecommendations(jwtUser) {
   const { nativeQueries, learningQueries, hints } =
     buildQueriesFromInterests(interests, targetLanguage);
 
+  // ✅ Translate native queries into target language to bias results toward native content
+  const translatedNativeQueries = [];
+  for (const q of nativeQueries.slice(0, 12)) { // cap to control cost
+    try {
+      translatedNativeQueries.push(await translateQueryCached(q, targetLanguage));
+    } catch {
+      translatedNativeQueries.push(q); // fallback
+    }
+  }
+
   // ✅ FIX: firstKeyword for seed search (avoid [object Object])
   const firstKeyword =
     extractKeywordsFromInterestId(interests?.[0]?.id)?.[0] || "";
@@ -242,7 +267,7 @@ async function buildRecommendations(jwtUser) {
   // native + learning lanes
   const nativeIds = await collectIdsFromQueries({
     apiKey,
-    queries: nativeQueries,
+    queries: translatedNativeQueries,
     targetYt,
     dislikedSet,
   });
