@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAvailableInterests, getMyInterests, setMyInterests } from "../services/api";
+import {
+  getAvailableInterests,
+  getMyInterests,
+  setMyInterests,
+} from "../services/api";
 import { isLoggedIn, clearAuth } from "../services/authStorage";
 
 function makeId(cat, sub) {
@@ -45,12 +49,14 @@ export default function Interests() {
         const a = await getAvailableInterests(); // { catalog }
         const mine = await getMyInterests(); // { interests: [{id, weight}], prefs }
 
-        setCatalog(a.catalog || {});
+        const cat = a.catalog || {};
+        setCatalog(cat);
+
         setSelected(Array.isArray(mine.interests) ? mine.interests : []);
         setPrefs(mine.prefs || { avoidLearningContent: false });
 
         // default expand first category
-        const keys = Object.keys(a.catalog || {});
+        const keys = Object.keys(cat);
         if (keys.length && !expandedCat) setExpandedCat(keys[0]);
       } catch (e) {
         clearAuth();
@@ -97,10 +103,7 @@ export default function Interests() {
     setError("");
     setSaving(true);
     try {
-      await setMyInterests({
-        interests: selected,
-        prefs,
-      });
+      await setMyInterests({ interests: selected, prefs });
       navigate("/");
     } catch (e) {
       setError(e.message || "Failed to save interests");
@@ -109,20 +112,48 @@ export default function Interests() {
     }
   }
 
-  if (loading) return <p>Loading interests...</p>;
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="card cardPad" style={{ color: "rgba(255,255,255,0.75)" }}>
+          Loading interests…
+        </div>
+      </div>
+    );
+  }
 
   const categories = Object.keys(catalog || {});
+  const subs = expandedCat ? catalog[expandedCat] || [] : [];
 
   return (
-    <div style={{ maxWidth: 900 }}>
-      <h1>Select your interests</h1>
-      <p>These will be used to personalize recommendations.</p>
+    <div className="page">
+      <div className="pageHeader">
+        <div>
+          <h1 className="h1">Interests</h1>
+          <p className="sub">
+            Pick what you actually enjoy. This improves recommendations and keeps immersion fun.
+          </p>
+        </div>
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+        <div className="row">
+          <button
+            className="btn btn-primary"
+            onClick={handleSave}
+            disabled={saving || !canSave}
+            type="button"
+          >
+            {saving ? "Saving..." : "Save interests"}
+          </button>
+        </div>
+      </div>
+
+      {error ? <div className="err" style={{ marginBottom: 10 }}>{error}</div> : null}
 
       {/* Preferences */}
-      <div style={{ margin: "12px 0", padding: 12, border: "1px solid #444", borderRadius: 10 }}>
-        <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div className="card cardPad" style={{ marginBottom: 12 }}>
+        <div className="sectionTitle">Preferences</div>
+
+        <label className="checkbox" style={{ marginTop: 8 }}>
           <input
             type="checkbox"
             checked={!!prefs.avoidLearningContent}
@@ -135,16 +166,25 @@ export default function Interests() {
       </div>
 
       {/* Custom interests */}
-      <div style={{ margin: "12px 0", padding: 12, border: "1px solid #444", borderRadius: 10 }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Custom interests</div>
-        <div style={{ display: "flex", gap: 10 }}>
+      <div className="card cardPad" style={{ marginBottom: 12 }}>
+        <div className="sectionTitle">Custom interests</div>
+        <div className="mini" style={{ marginBottom: 10 }}>
+          Add anything not in the list. Example: manga, streetwear, football, history memes…
+        </div>
+
+        <div className="row">
           <input
+            className="input"
             value={customText}
             onChange={(e) => setCustomText(e.target.value)}
-            placeholder="e.g., football, manga, streetwear, history memes…"
-            style={{ flex: 1, padding: 10 }}
+            placeholder="Type an interest…"
           />
-          <button type="button" onClick={addCustom} disabled={!customText.trim()}>
+          <button
+            className="btn"
+            type="button"
+            onClick={addCustom}
+            disabled={!customText.trim()}
+          >
             Add
           </button>
         </div>
@@ -152,26 +192,19 @@ export default function Interests() {
 
       {/* Category + tags */}
       {categories.length === 0 ? (
-        <p>No interest catalog received from backend.</p>
+        <div className="card cardPad">No interest catalog received from backend.</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 16 }}>
+        <div className="interestsLayout">
           {/* Categories */}
-          <div style={{ border: "1px solid #444", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Categories</div>
-            <div style={{ display: "grid", gap: 8 }}>
+          <div className="card cardPad">
+            <div className="sectionTitle">Categories</div>
+            <div className="list">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setExpandedCat(cat)}
-                  style={{
-                    textAlign: "left",
-                    padding: 10,
-                    borderRadius: 10,
-                    border: "1px solid #333",
-                    background: expandedCat === cat ? "#222" : "transparent",
-                    color: "white",
-                  }}
+                  className={`catBtn ${expandedCat === cat ? "catBtnActive" : ""}`}
                 >
                   {cat}
                 </button>
@@ -180,42 +213,33 @@ export default function Interests() {
           </div>
 
           {/* Tags */}
-          <div style={{ border: "1px solid #444", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>
-              {expandedCat || "Tags"}
+          <div className="card cardPad">
+            <div className="sectionTitle">{expandedCat || "Tags"}</div>
+            <div className="mini" style={{ marginBottom: 10 }}>
+              Select tags, then optionally mark favorites ⭐ for stronger recommendations.
             </div>
 
-            <div style={{ display: "grid", gap: 8 }}>
-              {(catalog[expandedCat] || []).map((sub) => {
+            <div className="list">
+              {subs.map((sub) => {
                 const id = makeId(expandedCat, sub);
                 const item = selectedMap.get(id);
                 const checked = !!item;
                 const fav = item?.weight === 2;
 
                 return (
-                  <div
-                    key={id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      border: "1px solid #333",
-                      padding: 10,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div key={id} className="tagRow">
+                    <div className="tagLeft">
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleTag(id)}
                       />
-                      {sub}
-                    </label>
+                      <div>{sub}</div>
+                    </div>
 
                     <button
                       type="button"
+                      className="starBtn"
                       onClick={() => toggleFavorite(id)}
                       disabled={!checked}
                       title="Favorite (stronger recommendations)"
@@ -231,26 +255,40 @@ export default function Interests() {
       )}
 
       {/* Selected summary */}
-      <div style={{ marginTop: 12, opacity: 0.9 }}>
-        <b>Selected:</b>{" "}
-        {selected.length === 0
-          ? "none"
-          : selected.map((x) => (x.weight === 2 ? `⭐ ${x.id}` : x.id)).join(", ")}
-      </div>
+      <div style={{ marginTop: 12 }} className="selectedBox">
+        <div style={{ fontWeight: 800, marginBottom: 6 }}>Selected</div>
 
-     <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-        <button
-          onClick={handleSave}
-          disabled={saving || !canSave}
-        >
-          {saving ? "Saving..." : "Save interests"}
-        </button>
-
-        {!canSave && (
-          <p style={{ opacity: 0.7 }}>
-            Select at least one interest to continue.
-          </p>
+        {selected.length === 0 ? (
+          <div className="mini">none</div>
+        ) : (
+          <div>
+            {selected.map((x) => (
+              <span
+                key={x.id}
+                className={`selectedPill ${x.weight === 2 ? "selectedPillFav" : ""}`}
+              >
+                {x.weight === 2 ? "⭐" : ""} {x.id}
+              </span>
+            ))}
+          </div>
         )}
+
+        <div className="row" style={{ marginTop: 12 }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleSave}
+            disabled={saving || !canSave}
+            type="button"
+          >
+            {saving ? "Saving..." : "Save interests"}
+          </button>
+
+          {!canSave ? (
+            <span className="mini">Select at least one interest to continue.</span>
+          ) : (
+            <span className="mini">You can edit this anytime in Profile.</span>
+          )}
+        </div>
       </div>
     </div>
   );
