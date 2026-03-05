@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  getHealthStatus,
   getMe,
   getRecommendations,
   getMyInterests,
@@ -19,7 +18,6 @@ import VideoCard from "../components/VideoCard";
 export default function Home() {
   const navigate = useNavigate();
 
-  const [status, setStatus] = useState("Loading...");
   const [me, setMe] = useState(null);
 
   const [items, setItems] = useState([]);
@@ -27,28 +25,24 @@ export default function Home() {
 
   const [playingId, setPlayingId] = useState(null);
 
-  // 🔎 Search state
+  // Search
   const [searchText, setSearchText] = useState("");
-  const [searchInfo, setSearchInfo] = useState(null); // { query, translated }
-  const [searchResults, setSearchResults] = useState(null); // null = not searching
+  const [searchInfo, setSearchInfo] = useState(null);
+  const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
 
-  // ✅ feedback state
+  // Feedback
   const [feedback, setFeedback] = useState({ liked: [], disliked: [] });
-
-  // ✅ sets (string-safe)
   const likedSet = new Set((feedback?.liked || []).map(String));
   const dislikedSet = new Set((feedback?.disliked || []).map(String));
 
   useEffect(() => {
-    // 1) must be logged in
     if (!isLoggedIn()) {
       navigate("/login");
       return;
     }
 
-    // 2) load user
     getMe()
       .then((data) => setMe(data.user))
       .catch(() => {
@@ -56,12 +50,10 @@ export default function Home() {
         navigate("/login");
       });
 
-    // ✅ load feedback
     getFeedback()
       .then((data) => setFeedback(data.feedback || { liked: [], disliked: [] }))
       .catch(() => {});
 
-    // 3) ensure interests exist
     getMyInterests()
       .then((data) => {
         if (!data.interests || data.interests.length === 0) {
@@ -73,12 +65,6 @@ export default function Home() {
         navigate("/login");
       });
 
-    // 4) backend health
-    getHealthStatus()
-      .then((data) => setStatus(data.message))
-      .catch(() => setStatus("Backend connection failed"));
-
-    // 5) recommendations
     getRecommendations()
       .then((data) => {
         const maybe =
@@ -92,9 +78,7 @@ export default function Home() {
 
         setItems(maybe);
       })
-      .catch((err) =>
-        setRecError(err?.message || "Failed to load recommendations")
-      );
+      .catch((err) => setRecError(err?.message || "Failed to load recommendations"));
   }, [navigate]);
 
   async function saveHistory(v) {
@@ -106,9 +90,7 @@ export default function Home() {
         channel: v.channel,
         language: v.language,
       });
-    } catch (e) {
-      console.warn("Failed to add to history:", e);
-    }
+    } catch {}
   }
 
   async function handleSearchSubmit(e) {
@@ -139,107 +121,109 @@ export default function Home() {
     setSearchText("");
   }
 
-  // ✅ Choose which list to show + filter disliked (UI-level)
   const listRaw = searchResults !== null ? searchResults : items;
-  const listToShow = (listRaw || []).filter(
-    (v) => !dislikedSet.has(String(v?.id))
-  );
+  const listToShow = (listRaw || []).filter((v) => !dislikedSet.has(String(v?.id)));
 
   return (
-    <div>
-      <h1>Home</h1>
-      <p>{status}</p>
+    <div className="page">
+      <div className="pageHeader">
+        <div>
+          <h1 className="h1">Home</h1>
+          <p className="sub">
+            {me?.targetLanguage ? (
+              <>Target: <b>{me.targetLanguage}</b> • </>
+            ) : null}
+            Find native content you actually like.
+          </p>
+        </div>
 
-      {me ? (
-        <p>
-          Verified user: <b>{me.email}</b>
-        </p>
-      ) : (
-        <p>Verifying login...</p>
-      )}
-
-      {/* 🔎 SEARCH UI */}
-      <form
-        onSubmit={handleSearchSubmit}
-        style={{ display: "flex", gap: 10, maxWidth: 700, margin: "12px 0" }}
-      >
-        <input
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          placeholder="Search anything… (any language)"
-          style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444" }}
-        />
-        <button type="submit" disabled={searchLoading || !searchText.trim()}>
-          {searchLoading ? "Searching..." : "Search"}
-        </button>
-
-        {searchResults !== null && (
-          <button type="button" onClick={clearSearch}>
-            Clear
+        <div className="row">
+          {me?.email ? <span className="pill">{me.email}</span> : null}
+          <button className="btn" type="button" onClick={() => navigate("/interests")}>
+            Edit interests
           </button>
-        )}
-      </form>
+        </div>
+      </div>
 
-      {searchError && <p style={{ color: "crimson" }}>{searchError}</p>}
+      <div className="card cardPad">
+        <form onSubmit={handleSearchSubmit} className="searchBar">
+          <input
+            className="input searchInput"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Search anything… (any language)"
+          />
 
-      {searchInfo && (
-        <p style={{ opacity: 0.8 }}>
-          Translated: <b>{searchInfo.translated}</b>
-        </p>
-      )}
+          <button className="btn btn-primary" type="submit" disabled={searchLoading || !searchText.trim()}>
+            {searchLoading ? "Searching..." : "Search"}
+          </button>
 
-      {/* ✅ NOW PLAYING */}
-      {playingId && (
-        <div style={{ marginBottom: 16 }}>
-          <h2>Now playing</h2>
+          {searchResults !== null && (
+            <button className="btn-ghost" type="button" onClick={clearSearch}>
+              Clear
+            </button>
+          )}
+        </form>
 
-          <div style={{ position: "relative", paddingTop: "56.25%" }}>
+        {searchError ? <div className="err" style={{ marginTop: 10 }}>{searchError}</div> : null}
+
+        {searchInfo ? (
+          <div style={{ marginTop: 10, color: "rgba(255,255,255,0.75)" }}>
+            Translated: <b>{searchInfo.translated}</b>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="spacer" />
+
+      {playingId ? (
+        <div className="card cardPad">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 800 }}>Now playing</div>
+            <button className="btn" onClick={() => setPlayingId(null)}>
+              Close
+            </button>
+          </div>
+
+          <div style={{ height: 12 }} />
+
+          <div className="playerWrap">
             <iframe
               title="YouTube player"
               src={`https://www.youtube.com/embed/${playingId}?autoplay=1`}
               allow="autoplay; encrypted-media"
               allowFullScreen
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                border: 0,
-                borderRadius: 10,
-              }}
             />
           </div>
-
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button onClick={() => setPlayingId(null)}>Close player</button>
-          </div>
         </div>
-      )}
+      ) : null}
 
-      <h2>{searchResults !== null ? "Search results" : "Recommendations"}</h2>
+      <div className="spacer" />
 
-      {searchResults === null && recError && (
-        <p style={{ color: "crimson" }}>{recError}</p>
-      )}
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h2 style={{ margin: 0 }}>
+          {searchResults !== null ? "Search results" : "Recommended for you"}
+        </h2>
+        {searchResults === null && recError ? <span className="err">{recError}</span> : null}
+      </div>
 
-      <div style={{ display: "grid", gap: 12, maxWidth: 700 }}>
-        {listToShow.length === 0 ? (
-          <p>
-            {searchResults !== null ? "No search results." : "No recommendations yet."}
-          </p>
-        ) : (
-          listToShow.map((v, idx) => (
+      <div className="spacer" />
+
+      {listToShow.length === 0 ? (
+        <div className="card cardPad" style={{ color: "rgba(255,255,255,0.75)" }}>
+          {searchResults !== null ? "No search results." : "No recommendations yet."}
+        </div>
+      ) : (
+        <div className="grid">
+          {listToShow.map((v, idx) => (
             <VideoCard
               key={v?.id ?? idx}
               title={v?.title ?? "(no title)"}
               channel={v?.channel ?? "(no channel)"}
               url={v?.url ?? ""}
               reason={v?.reason ?? ""}
-
               thumbnail={v?.thumbnail ?? ""}
 
-              // ✅ flags for UI (button state)
               liked={likedSet.has(String(v?.id))}
               disliked={dislikedSet.has(String(v?.id))}
 
@@ -254,28 +238,24 @@ export default function Home() {
                 if (v?.url) window.open(v.url, "_blank", "noreferrer");
               }}
 
-              // ✅ like updates feedback immediately
               onLike={async () => {
                 if (!v?.id) return;
                 const data = await likeVideo(v.id);
                 setFeedback(data.feedback || { liked: [], disliked: [] });
               }}
 
-              // ✅ dislike updates feedback + removes from lists immediately
               onDislike={async () => {
                 if (!v?.id) return;
                 const data = await dislikeVideo(v.id);
                 setFeedback(data.feedback || { liked: [], disliked: [] });
 
                 setItems((prev) => prev.filter((x) => x?.id !== v.id));
-                setSearchResults((prev) =>
-                  prev ? prev.filter((x) => x?.id !== v.id) : prev
-                );
+                setSearchResults((prev) => (prev ? prev.filter((x) => x?.id !== v.id) : prev));
               }}
             />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

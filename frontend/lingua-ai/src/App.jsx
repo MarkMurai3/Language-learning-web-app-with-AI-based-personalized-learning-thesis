@@ -1,12 +1,6 @@
-// src/App.jsx
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useState } from "react";
-
-import "./App.css";
-
 import Navbar from "./components/Navbar";
-import NotesWidget from "./components/NotesWidget";
-
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -14,13 +8,16 @@ import Interests from "./pages/Interests";
 import Profile from "./pages/Profile";
 import History from "./pages/History";
 import Chat from "./pages/Chat";
+import NotesWidget from "./components/NotesWidget";
 import Admin from "./pages/Admin";
 import Roleplay from "./pages/Roleplay";
 import Story from "./pages/Story";
 
-function AppShell() {
-  const location = useLocation();
+import "./App.css";
+
+function AppInner() {
   const [notesOpen, setNotesOpen] = useState(false);
+  const location = useLocation();
 
   const isAuthPage =
     location.pathname === "/login" || location.pathname === "/register";
@@ -29,30 +26,24 @@ function AppShell() {
     <>
       {!isAuthPage && (
         <div className="app-shell">
-          <Navbar onToggleNotes={() => setNotesOpen(true)} />
+          <Navbar onToggleNotes={() => setNotesOpen((v) => !v)} />
         </div>
       )}
 
-      {/* Main content */}
-      <div className={isAuthPage ? "" : "app-shell"}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/interests" element={<Interests />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/story" element={<Story />} />
-          <Route path="/roleplay" element={<Roleplay />} />
-          <Route path="/admin" element={<Admin />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/interests" element={<Interests />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/story" element={<Story />} />
+        <Route path="/roleplay" element={<Roleplay />} />
+        <Route path="/admin" element={<Admin />} />
+      </Routes>
 
-      {/* Notes only outside auth pages */}
-      {!isAuthPage && (
-        <NotesWidget open={notesOpen} onClose={() => setNotesOpen(false)} />
-      )}
+      <NotesWidget open={notesOpen} onClose={() => setNotesOpen(false)} />
     </>
   );
 }
@@ -60,7 +51,7 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppShell />
+      <AppInner />
     </BrowserRouter>
   );
 }
