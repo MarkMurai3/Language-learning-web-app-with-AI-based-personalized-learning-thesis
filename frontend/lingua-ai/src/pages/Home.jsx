@@ -237,6 +237,8 @@ export default function Home() {
               url={v?.url ?? ""}
               reason={v?.reason ?? ""}
 
+              thumbnail={v?.thumbnail ?? ""}
+
               // ✅ flags for UI (button state)
               liked={likedSet.has(String(v?.id))}
               disliked={dislikedSet.has(String(v?.id))}
