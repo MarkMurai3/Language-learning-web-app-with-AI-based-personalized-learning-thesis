@@ -1,7 +1,9 @@
+// src/pages/Login.jsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { login as loginApi } from "../services/api";
 import { saveAuth } from "../services/authStorage";
+import AuthLayout from "../components/AuthLayout";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -19,13 +21,8 @@ export default function Login() {
 
     try {
       const { user, token } = await loginApi(email, password);
-
-      // Save token + user
       saveAuth(token, user);
-
-      // ✅ Redirect to HOME (not interests!)
       navigate("/", { replace: true });
-
     } catch (err) {
       setError(err.message || "Login failed");
     } finally {
@@ -34,39 +31,50 @@ export default function Login() {
   }
 
   return (
-    <div>
-      <h1>Login</h1>
+    <AuthLayout
+      title="Practice Languages With AI"
+      subtitle="Improve naturally through conversation"
+    >
+      <div className="auth-cardHeader">
+        <div className="auth-icon" aria-hidden="true">🔒</div>
+        <div className="auth-cardTitle">Login</div>
+      </div>
 
-      <form
-        onSubmit={handleSubmit}
-        style={{ display: "grid", gap: 10, maxWidth: 320 }}
-      >
-        <label>
-          Email
+      <form onSubmit={handleSubmit} className="form">
+        <div className="field">
+          <label>Email</label>
           <input
+            className="input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
+            placeholder="Email"
             required
           />
-        </label>
+        </div>
 
-        <label>
-          Password
+        <div className="field">
+          <label>Password</label>
           <input
+            className="input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
+            placeholder="Password"
             required
           />
-        </label>
+        </div>
 
-        <button disabled={loading} type="submit">
+        <button className="btn btn-primary" disabled={loading} type="submit">
           {loading ? "Signing in..." : "Login"}
         </button>
 
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
+        {error ? <div className="err">{error}</div> : null}
       </form>
-    </div>
+
+      <div className="auth-footer">
+        Don’t have an account? <Link to="/register">Register</Link>
+      </div>
+    </AuthLayout>
   );
 }

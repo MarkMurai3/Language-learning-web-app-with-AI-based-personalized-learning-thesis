@@ -1,6 +1,12 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+// src/App.jsx
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useState } from "react";
+
+import "./App.css";
+
 import Navbar from "./components/Navbar";
+import NotesWidget from "./components/NotesWidget";
+
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -8,23 +14,27 @@ import Interests from "./pages/Interests";
 import Profile from "./pages/Profile";
 import History from "./pages/History";
 import Chat from "./pages/Chat";
-import NotesWidget from "./components/NotesWidget";
 import Admin from "./pages/Admin";
 import Roleplay from "./pages/Roleplay";
 import Story from "./pages/Story";
 
-
-
-export default function App() {
+function AppShell() {
+  const location = useLocation();
   const [notesOpen, setNotesOpen] = useState(false);
 
+  const isAuthPage =
+    location.pathname === "/login" || location.pathname === "/register";
+
   return (
-    <BrowserRouter>
-      <Navbar />
+    <>
+      {!isAuthPage && (
+        <div className="app-shell">
+          <Navbar onToggleNotes={() => setNotesOpen(true)} />
+        </div>
+      )}
 
-      <div style={{ padding: 12 }}>
-        <button onClick={() => setNotesOpen(true)}>Open Notes</button>
-
+      {/* Main content */}
+      <div className={isAuthPage ? "" : "app-shell"}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -36,14 +46,21 @@ export default function App() {
           <Route path="/story" element={<Story />} />
           <Route path="/roleplay" element={<Roleplay />} />
           <Route path="/admin" element={<Admin />} />
-
-
         </Routes>
       </div>
 
-      {notesOpen && (
+      {/* Notes only outside auth pages */}
+      {!isAuthPage && (
         <NotesWidget open={notesOpen} onClose={() => setNotesOpen(false)} />
       )}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
     </BrowserRouter>
   );
 }
