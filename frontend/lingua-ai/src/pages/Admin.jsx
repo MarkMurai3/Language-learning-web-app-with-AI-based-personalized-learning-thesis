@@ -1,4 +1,4 @@
-// frontend/src/pages/Admin.jsx
+// src/pages/Admin.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMe, getLanguages } from "../services/api";
@@ -62,7 +62,7 @@ export default function Admin() {
           return;
         }
 
-        // load languages once after auth
+        // load languages once
         getLanguages()
           .then((d) => setLanguages(d.languages || []))
           .catch(() => {});
@@ -77,7 +77,6 @@ export default function Admin() {
     return scopeUserId ? Number(scopeUserId) : undefined;
   }
 
-  // ---- loaders ----
   async function loadUsers() {
     setError("");
     setUsersLoading(true);
@@ -128,293 +127,314 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, me, scopeUserId]);
 
-  if (!me) return <p>Checking admin access...</p>;
+  if (!me) {
+    return (
+      <div className="page">
+        <div className="card cardPad" style={{ color: "rgba(255,255,255,0.75)" }}>
+          Checking admin access…
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: 900 }}>
-      <h1>Admin</h1>
-      <p>
-        Logged in as <b>{me.email}</b> ({me.role})
-      </p>
-
-      <div style={{ display: "flex", gap: 10, margin: "12px 0" }}>
-        <button onClick={() => setTab("users")} disabled={tab === "users"}>
-          Users
-        </button>
-        <button onClick={() => setTab("blocked")} disabled={tab === "blocked"}>
-          Blocked videos
-        </button>
-        <button onClick={() => setTab("seeds")} disabled={tab === "seeds"}>
-          Seed channels
-        </button>
+    <div className="page">
+      <div className="pageHeader">
+        <div>
+          <h1 className="h1">Admin</h1>
+          <p className="sub">
+            Logged in as <b>{me.email}</b> ({me.role})
+          </p>
+        </div>
       </div>
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-
-      {/* Apply scope (global vs specific user) */}
-      <div style={{ margin: "10px 0 16px 0" }}>
-        <label>
-          Apply to{" "}
-          <select
-            value={scopeUserId}
-            onChange={(e) => setScopeUserId(e.target.value)}
-            disabled={usersLoading && tab !== "users"}
+      <div className="adminTop">
+        {/* Tabs */}
+        <div className="tabs">
+          <button
+            className={`tabBtn ${tab === "users" ? "tabBtnActive" : ""}`}
+            onClick={() => setTab("users")}
+            type="button"
           >
-            <option value="">All users (global)</option>
-            {users.map((u) => (
-              <option key={u.id} value={String(u.id)}>
-                #{u.id} {u.email}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span style={{ marginLeft: 10, opacity: 0.75, fontSize: 13 }}>
-          (Blocked videos + seed channels will be scoped)
-        </span>
-      </div>
+            Users
+          </button>
 
-      {tab === "users" && (
-        <section style={{ border: "1px solid #444", padding: 12, borderRadius: 10 }}>
-          <h2>Users</h2>
-          {usersLoading ? (
-            <p>Loading...</p>
-          ) : users.length === 0 ? (
-            <p>No users found.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
+          <button
+            className={`tabBtn ${tab === "blocked" ? "tabBtnActive" : ""}`}
+            onClick={() => setTab("blocked")}
+            type="button"
+          >
+            Blocked videos
+          </button>
+
+          <button
+            className={`tabBtn ${tab === "seeds" ? "tabBtnActive" : ""}`}
+            onClick={() => setTab("seeds")}
+            type="button"
+          >
+            Seed channels
+          </button>
+        </div>
+
+        {error ? <div className="err">{error}</div> : null}
+
+        {/* Scope selector */}
+        <div className="card cardPad">
+          <div className="sectionTitle">Scope</div>
+          <div className="small" style={{ marginBottom: 10 }}>
+            Choose whether changes apply globally or to a specific user.
+          </div>
+
+          <label className="field">
+            <span style={{ display: "block", marginBottom: 6, color: "rgba(255,255,255,0.65)" }}>
+              Apply to
+            </span>
+            <select
+              className="select"
+              value={scopeUserId}
+              onChange={(e) => setScopeUserId(e.target.value)}
+              disabled={usersLoading && tab !== "users"}
+            >
+              <option value="">All users (global)</option>
               {users.map((u) => (
-                <div
-                  key={u.id}
-                  style={{
-                    border: "1px solid #333",
-                    padding: 10,
-                    borderRadius: 10,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div>
-                    <div>
-                      <b>#{u.id}</b> {u.email} — <i>{u.role}</i>
-                    </div>
-                    <div style={{ opacity: 0.8, fontSize: 13 }}>
-                      targetLanguage: {u.targetLanguage || "—"} • disabled:{" "}
-                      {u.disabled ? "true" : "false"}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={async () => {
-                      setError("");
-                      try {
-                        await adminSetUserDisabled(u.id, !u.disabled);
-                        await loadUsers();
-                      } catch (e) {
-                        setError(e.message || "Update failed");
-                      }
-                    }}
-                  >
-                    {u.disabled ? "Enable" : "Disable"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {tab === "blocked" && (
-        <section style={{ border: "1px solid #444", padding: 12, borderRadius: 10 }}>
-          <h2>Blocked videos</h2>
-
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setError("");
-
-              const vid = blockVideoId.trim();
-              if (!vid) return;
-
-              try {
-                await adminAddBlockedVideo(vid, blockReason.trim(), scopeArg());
-                setBlockVideoId("");
-                setBlockReason("");
-                await loadBlocked();
-              } catch (e2) {
-                setError(e2.message || "Failed to add blocked video");
-              }
-            }}
-            style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}
-          >
-            <input
-              value={blockVideoId}
-              onChange={(e) => setBlockVideoId(e.target.value)}
-              placeholder="YouTube videoId (e.g., dQw4w9WgXcQ)"
-              style={{ flex: 1, minWidth: 260, padding: 10 }}
-            />
-            <input
-              value={blockReason}
-              onChange={(e) => setBlockReason(e.target.value)}
-              placeholder="Reason (optional)"
-              style={{ flex: 1, minWidth: 220, padding: 10 }}
-            />
-            <button type="submit" disabled={blockedLoading}>
-              Block
-            </button>
-          </form>
-
-          {blockedLoading ? (
-            <p>Loading...</p>
-          ) : blocked.length === 0 ? (
-            <p>No blocked videos.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {blocked.map((b) => (
-                <div
-                  key={b.videoId}
-                  style={{
-                    border: "1px solid #333",
-                    padding: 10,
-                    borderRadius: 10,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div>
-                    <div>
-                      <b>{b.videoId}</b>
-                    </div>
-                    <div style={{ opacity: 0.8, fontSize: 13 }}>
-                      {b.reason || "—"} • {b.createdAt || ""}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={async () => {
-                      setError("");
-                      try {
-                        await adminDeleteBlockedVideo(b.videoId, scopeArg());
-                        await loadBlocked();
-                      } catch (e) {
-                        setError(e.message || "Delete failed");
-                      }
-                    }}
-                  >
-                    Unblock
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {tab === "seeds" && (
-        <section style={{ border: "1px solid #444", padding: 12, borderRadius: 10 }}>
-          <h2>Seed channels</h2>
-
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setError("");
-
-              const ch = seedChannelId.trim();
-              if (!ch) return;
-
-              try {
-                await adminAddSeedChannel(
-                  seedLanguage,
-                  ch,
-                  seedLabel.trim(),
-                  scopeArg()
-                );
-                setSeedChannelId("");
-                setSeedLabel("");
-                await loadSeeds();
-              } catch (e2) {
-                setError(e2.message || "Failed to add seed channel");
-              }
-            }}
-            style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}
-          >
-            <select value={seedLanguage} onChange={(e) => setSeedLanguage(e.target.value)}>
-              {(languages.length ? languages : ["English"]).map((lang) => (
-                <option key={lang} value={lang}>
-                  {lang}
+                <option key={u.id} value={String(u.id)}>
+                  #{u.id} {u.email}
                 </option>
               ))}
             </select>
+          </label>
 
-            <input
-              value={seedChannelId}
-              onChange={(e) => setSeedChannelId(e.target.value)}
-              placeholder="channelId (from YouTube channel URL)"
-              style={{ flex: 1, minWidth: 260, padding: 10 }}
-            />
+          <div className="mini" style={{ marginTop: 8 }}>
+            Blocked videos + seed channels will use this scope.
+          </div>
+        </div>
 
-            <input
-              value={seedLabel}
-              onChange={(e) => setSeedLabel(e.target.value)}
-              placeholder="Label (optional)"
-              style={{ flex: 1, minWidth: 220, padding: 10 }}
-            />
+        {/* USERS */}
+        {tab === "users" && (
+          <div className="card cardPad">
+            <div className="sectionTitle">Users</div>
 
-            <button type="submit" disabled={seedsLoading}>
-              Add seed
-            </button>
-          </form>
-
-          {seedsLoading ? (
-            <p>Loading...</p>
-          ) : seeds.length === 0 ? (
-            <p>No seed channels.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {seeds.map((s, idx) => (
-                <div
-                  key={`${s.language}:${s.channelId}:${idx}`}
-                  style={{
-                    border: "1px solid #333",
-                    padding: 10,
-                    borderRadius: 10,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div>
-                    <div>
-                      <b>{s.language}</b> — {s.channelId}
+            {usersLoading ? (
+              <div style={{ color: "rgba(255,255,255,0.75)" }}>Loading…</div>
+            ) : users.length === 0 ? (
+              <div style={{ color: "rgba(255,255,255,0.75)" }}>No users found.</div>
+            ) : (
+              <div className="list">
+                {users.map((u) => (
+                  <div className="rowItem" key={u.id}>
+                    <div className="rowItemLeft">
+                      <div>
+                        <b>#{u.id}</b> {u.email} — <span className="mini">{u.role}</span>
+                      </div>
+                      <div className="mini">
+                        targetLanguage: {u.targetLanguage || "—"} • disabled:{" "}
+                        {u.disabled ? "true" : "false"}
+                      </div>
                     </div>
-                    <div style={{ opacity: 0.8, fontSize: 13 }}>
-                      {s.label || "—"} • {s.createdAt || ""}
-                    </div>
+
+                    <button
+                      className={`btn ${u.disabled ? "btn-primary" : ""}`}
+                      type="button"
+                      onClick={async () => {
+                        setError("");
+                        try {
+                          await adminSetUserDisabled(u.id, !u.disabled);
+                          await loadUsers();
+                        } catch (e) {
+                          setError(e.message || "Update failed");
+                        }
+                      }}
+                    >
+                      {u.disabled ? "Enable" : "Disable"}
+                    </button>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-                  <button
-                    onClick={async () => {
-                      setError("");
-                      try {
-                        await adminDeleteSeedChannel(s.language, s.channelId, scopeArg());
-                        await loadSeeds();
-                      } catch (e) {
-                        setError(e.message || "Delete failed");
-                      }
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+        {/* BLOCKED */}
+        {tab === "blocked" && (
+          <div className="card cardPad">
+            <div className="sectionTitle">Blocked videos</div>
+            <div className="mini" style={{ marginBottom: 10 }}>
+              Prevent specific YouTube video IDs from being recommended.
             </div>
-          )}
-        </section>
-      )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setError("");
+
+                const vid = blockVideoId.trim();
+                if (!vid) return;
+
+                try {
+                  await adminAddBlockedVideo(vid, blockReason.trim(), scopeArg());
+                  setBlockVideoId("");
+                  setBlockReason("");
+                  await loadBlocked();
+                } catch (e2) {
+                  setError(e2.message || "Failed to add blocked video");
+                }
+              }}
+              className="formRow"
+            >
+              <input
+                className="input"
+                value={blockVideoId}
+                onChange={(e) => setBlockVideoId(e.target.value)}
+                placeholder="YouTube videoId (e.g., dQw4w9WgXcQ)"
+              />
+              <input
+                className="input"
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                placeholder="Reason (optional)"
+              />
+              <button className="btn btn-primary" type="submit" disabled={blockedLoading}>
+                Block
+              </button>
+            </form>
+
+            {blockedLoading ? (
+              <div style={{ marginTop: 12, color: "rgba(255,255,255,0.75)" }}>Loading…</div>
+            ) : blocked.length === 0 ? (
+              <div style={{ marginTop: 12, color: "rgba(255,255,255,0.75)" }}>No blocked videos.</div>
+            ) : (
+              <div className="list">
+                {blocked.map((b) => (
+                  <div className="rowItem" key={b.videoId}>
+                    <div className="rowItemLeft">
+                      <div>
+                        <b>{b.videoId}</b>
+                      </div>
+                      <div className="mini">
+                        {b.reason || "—"} • {b.createdAt || ""}
+                      </div>
+                    </div>
+
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={async () => {
+                        setError("");
+                        try {
+                          await adminDeleteBlockedVideo(b.videoId, scopeArg());
+                          await loadBlocked();
+                        } catch (e) {
+                          setError(e.message || "Delete failed");
+                        }
+                      }}
+                    >
+                      Unblock
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SEEDS */}
+        {tab === "seeds" && (
+          <div className="card cardPad">
+            <div className="sectionTitle">Seed channels</div>
+            <div className="mini" style={{ marginBottom: 10 }}>
+              Add trusted channels per language to guide recommendations.
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setError("");
+
+                const ch = seedChannelId.trim();
+                if (!ch) return;
+
+                try {
+                  await adminAddSeedChannel(seedLanguage, ch, seedLabel.trim(), scopeArg());
+                  setSeedChannelId("");
+                  setSeedLabel("");
+                  await loadSeeds();
+                } catch (e2) {
+                  setError(e2.message || "Failed to add seed channel");
+                }
+              }}
+              className="formRow"
+              style={{ gridTemplateColumns: "220px 1fr 1fr auto" }}
+            >
+              <select
+                className="select"
+                value={seedLanguage}
+                onChange={(e) => setSeedLanguage(e.target.value)}
+              >
+                {(languages.length ? languages : ["English"]).map((lang) => (
+                  <option key={lang} value={lang}>
+                    {lang}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="input"
+                value={seedChannelId}
+                onChange={(e) => setSeedChannelId(e.target.value)}
+                placeholder="channelId (from YouTube channel URL)"
+              />
+
+              <input
+                className="input"
+                value={seedLabel}
+                onChange={(e) => setSeedLabel(e.target.value)}
+                placeholder="Label (optional)"
+              />
+
+              <button className="btn btn-primary" type="submit" disabled={seedsLoading}>
+                Add seed
+              </button>
+            </form>
+
+            {seedsLoading ? (
+              <div style={{ marginTop: 12, color: "rgba(255,255,255,0.75)" }}>Loading…</div>
+            ) : seeds.length === 0 ? (
+              <div style={{ marginTop: 12, color: "rgba(255,255,255,0.75)" }}>No seed channels.</div>
+            ) : (
+              <div className="list">
+                {seeds.map((s, idx) => (
+                  <div className="rowItem" key={`${s.language}:${s.channelId}:${idx}`}>
+                    <div className="rowItemLeft">
+                      <div>
+                        <b>{s.language}</b> — {s.channelId}
+                      </div>
+                      <div className="mini">
+                        {s.label || "—"} • {s.createdAt || ""}
+                      </div>
+                    </div>
+
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={async () => {
+                        setError("");
+                        try {
+                          await adminDeleteSeedChannel(s.language, s.channelId, scopeArg());
+                          await loadSeeds();
+                        } catch (e) {
+                          setError(e.message || "Delete failed");
+                        }
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
