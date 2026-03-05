@@ -1,7 +1,9 @@
+// src/pages/Register.jsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { register as registerApi } from "../services/api";
 import { saveAuth } from "../services/authStorage";
+import AuthLayout from "../components/AuthLayout";
 
 const LANGUAGE_OPTIONS = [
   "English", "French", "Spanish", "German", "Italian", "Portuguese",
@@ -9,22 +11,14 @@ const LANGUAGE_OPTIONS = [
   "Thai", "Vietnamese", "Indonesian", "Bengali", "Urdu", "Turkish",
   "Polish", "Swedish", "Finnish", "Romanian", "Dutch", "Czech", "Greek",
   "Bulgarian", "Swahili", "Afrikaans", "Norwegian", "Tagalog",
-  "Ukrainian", "Hebrew", "Malay", "Tamil"
+  "Ukrainian", "Hebrew", "Malay", "Tamil",
 ];
-
-
-// const LEVEL_OPTIONS = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 export default function Register() {
   const navigate = useNavigate();
 
-  // const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-
-  // const [nativeLanguage, setNativeLanguage] = useState("Hungarian");
   const [targetLanguage, setTargetLanguage] = useState("English");
-  // const [targetLevel, setTargetLevel] = useState("A2");
-
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -42,18 +36,10 @@ export default function Register() {
 
     setLoading(true);
     try {
-      const { user, token } = await registerApi(
-        email,
-        password,
-        // username,
-        // nativeLanguage,
-        targetLanguage,
-        // targetLevel
-      );
-
+      const { user, token } = await registerApi(email, password, targetLanguage);
       saveAuth(token, user);
 
-      // After register → interests onboarding
+      // after register -> interests onboarding
       navigate("/interests");
     } catch (err) {
       setError(err.message || "Registration failed");
@@ -63,74 +49,80 @@ export default function Register() {
   }
 
   return (
-    <div>
-      <h1>Register</h1>
+    <AuthLayout
+      title="Practice Languages With AI"
+      subtitle="Create your account and start immersing today."
+    >
+      <div className="auth-cardHeader">
+        <div className="auth-icon" aria-hidden="true">✨</div>
+        <div className="auth-cardTitle">Register</div>
+      </div>
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10, maxWidth: 360 }}>
-        {/* <label>
-          Username
-          <input value={username} onChange={(e) => setUsername(e.target.value)} required />
-        </label> */}
-
-        <label>
-          Email
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
-        </label>
-
-        {/* <label>
-          Native language
-          <select value={nativeLanguage} onChange={(e) => setNativeLanguage(e.target.value)}>
-            {LANGUAGE_OPTIONS.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </label> */}
-
-        <label>
-          Target language
-          <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)}>
-            {LANGUAGE_OPTIONS.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {/* <label>
-          Target level
-          <select value={targetLevel} onChange={(e) => setTargetLevel(e.target.value)}>
-            {LEVEL_OPTIONS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {lvl}
-              </option>
-            ))}
-          </select>
-        </label> */}
-
-        <label>
-          Password
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
-        </label>
-
-        <label>
-          Confirm password
+      <form onSubmit={handleSubmit} className="form">
+        <div className="field">
+          <label>Email</label>
           <input
+            className="input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            placeholder="Email"
+            autoComplete="email"
+            required
+          />
+        </div>
+
+        <div className="field">
+          <label>Target language</label>
+          <select
+            className="input"
+            value={targetLanguage}
+            onChange={(e) => setTargetLanguage(e.target.value)}
+          >
+            {LANGUAGE_OPTIONS.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Password</label>
+          <input
+            className="input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            placeholder="Password"
+            autoComplete="new-password"
+            required
+          />
+        </div>
+
+        <div className="field">
+          <label>Confirm password</label>
+          <input
+            className="input"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             type="password"
+            placeholder="Confirm password"
+            autoComplete="new-password"
             required
           />
-        </label>
+        </div>
 
-        <button disabled={loading} type="submit">
+        <button className="btn btn-primary" disabled={loading} type="submit">
           {loading ? "Creating account..." : "Register"}
         </button>
 
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
+        {error ? <div className="err">{error}</div> : null}
       </form>
-    </div>
+
+      <div className="auth-footer">
+        Already have an account? <Link to="/login">Login</Link>
+      </div>
+    </AuthLayout>
   );
 }
