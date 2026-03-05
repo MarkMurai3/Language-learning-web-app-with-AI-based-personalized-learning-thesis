@@ -46,7 +46,7 @@ async function searchVideos(req, res) {
     const q = String(req.query.q || "").trim();
     if (!q) return res.status(400).json({ error: "Missing q" });
 
-    const profile = getUserById(req.user.userId);
+    const profile = await getUserById(req.user.userId);
     const targetLanguage = profile?.targetLanguage || "English";
     const { yt: targetYt, franc: targetFranc } = getLangCodes(targetLanguage);
 
