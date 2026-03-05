@@ -16,7 +16,6 @@ export default function Profile() {
   const navigate = useNavigate();
 
   const [targetLanguage, setTargetLanguage] = useState("English");
-
   const [myInterests, setMyInterests] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -45,7 +44,6 @@ export default function Profile() {
         const interestsData = await getMyInterests();
         setMyInterests(interestsData.interests || []);
       } catch (e) {
-        // If token is invalid / expired -> log out
         clearAuth();
         navigate("/login");
       } finally {
@@ -63,9 +61,7 @@ export default function Profile() {
     setSaving(true);
 
     try {
-      const data = await updateProfile({
-        targetLanguage,
-      });
+      const data = await updateProfile({ targetLanguage });
 
       // Update localStorage user so Navbar updates immediately
       setUser(data.user);
@@ -77,42 +73,83 @@ export default function Profile() {
     }
   }
 
-  if (loading) return <p>Loading profile...</p>;
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="card cardPad" style={{ color: "rgba(255,255,255,0.75)" }}>
+          Loading profile…
+        </div>
+      </div>
+    );
+  }
+
+  const interestsText =
+    myInterests.length ? myInterests.map((x) => x.id).join(", ") : "none";
 
   return (
-    <div>
-      <h1>Profile</h1>
-
-      <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 360 }}>
-        <label>
-          Target language
-          <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)}>
-            {LANGUAGE_OPTIONS.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button disabled={saving} type="submit">
-          {saving ? "Saving..." : "Save profile"}
-        </button>
-
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
-        {success && <p style={{ color: "green" }}>{success}</p>}
-      </form>
-
-      {/* Interests preview + edit button */}
-      <div style={{ marginTop: 16, opacity: 0.9 }}>
-        <b>Interests:</b>{" "}
-        {myInterests.length ? myInterests.map((x) => x.id).join(", ") : "none"}
+    <div className="page">
+      <div className="pageHeader">
+        <div>
+          <h1 className="h1">Profile</h1>
+          <p className="sub">Set your target language and manage your interests.</p>
+        </div>
       </div>
 
-      <div style={{ marginTop: 10 }}>
-        <Link to="/interests">
-          <button type="button">Edit interests</button>
-        </Link>
+      <div className="grid" style={{ gridTemplateColumns: "1fr", maxWidth: 900 }}>
+        {/* Main settings card */}
+        <div className="card cardPad">
+          <div className="sectionTitle">Learning settings</div>
+
+          <form onSubmit={handleSave} className="formGrid">
+            <div className="field">
+              <label>Target language</label>
+              <select
+                className="select"
+                value={targetLanguage}
+                onChange={(e) => setTargetLanguage(e.target.value)}
+              >
+                {LANGUAGE_OPTIONS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="row">
+              <button className="btn btn-primary" disabled={saving} type="submit">
+                {saving ? "Saving..." : "Save profile"}
+              </button>
+
+              <Link to="/interests" style={{ textDecoration: "none" }}>
+                <button className="btn" type="button">
+                  Edit interests
+                </button>
+              </Link>
+            </div>
+
+            {error ? <div className="err">{error}</div> : null}
+            {success ? <div className="success">{success}</div> : null}
+          </form>
+
+          <div className="divider" />
+
+          <div className="kv">
+            <div>
+              <strong>Current interests:</strong>
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.75)" }}>{interestsText}</div>
+          </div>
+        </div>
+
+        {/* Secondary card (nice summary) */}
+        <div className="card cardPad">
+          <div className="sectionTitle">Recommendation quality</div>
+          <div style={{ color: "rgba(255,255,255,0.75)" }}>
+            Your target language and interests directly affect what you see on the Home page.
+            If recommendations feel off, update interests and try again.
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,52 +1,20 @@
-// frontend/src/pages/Roleplay.jsx
+// src/pages/Roleplay.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendChat, tts, stt, sttLocal, getRoleplayScenarios, prepareRoleplayScenario, getMe } from "../services/api";
+import {
+  sendChat,
+  tts,
+  stt,
+  sttLocal,
+  getRoleplayScenarios,
+  prepareRoleplayScenario,
+  getMe,
+} from "../services/api";
 import { isLoggedIn, clearAuth, getUser } from "../services/authStorage";
-/**
- * Reads token from localStorage. Adjust the key if your project stores it differently.
- * Common options in projects like yours:
- * - localStorage.getItem("auth_token")
- * - localStorage.getItem("token")
- * - JSON.parse(localStorage.getItem("auth_user"))?.token
- */
-// function getAuthToken() {
-//   return (
-//     localStorage.getItem("auth_token") ||
-//     localStorage.getItem("token") ||
-//     (() => {
-//       try {
-//         const u = JSON.parse(localStorage.getItem("auth_user") || "null");
-//         return u?.token || "";
-//       } catch {
-//         return "";
-//       }
-//     })()
-//   );
-// }
 
 function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
-
-// async function apiGet(path) {
-//   const token = getAuthToken();
-//   const res = await fetch(`${import.meta.env.VITE_API_URL || ""}${path}`, {
-//     method: "GET",
-//     headers: {
-//       "Content-Type": "application/json",
-//       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-//     },
-//   });
-//   const data = await res.json().catch(() => ({}));
-//   if (!res.ok) {
-//     const msg = data?.error || `Request failed: ${res.status}`;
-//     const err = new Error(msg);
-//     err.status = res.status;
-//     throw err;
-//   }
-//   return data;
-// }
 
 export default function Roleplay() {
   const navigate = useNavigate();
@@ -55,12 +23,11 @@ export default function Roleplay() {
   const [targetLanguage, setTargetLanguage] = useState("English");
   const [sttMode, setSttMode] = useState("openai"); // "openai" | "local"
 
-  // list of scenario "stubs" from backend: [{id,title,description}]
+  // list of scenario stubs: [{id,title,description}]
   const [scenarioList, setScenarioList] = useState([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
 
-  // prepared (translated) scenario from backend:
-  // { id, title, description, starterUser, systemPrompt }
+  // prepared scenario: { id, title, description, starterUser, systemPrompt }
   const [scenario, setScenario] = useState(null);
 
   const [messages, setMessages] = useState([]);
@@ -70,7 +37,7 @@ export default function Roleplay() {
   const [error, setError] = useState("");
   const [assistantStarts, setAssistantStarts] = useState(true);
 
-  // TTS/STT state
+  // TTS/STT
   const [speaking, setSpeaking] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
   const [voice, setVoice] = useState("coral");
@@ -87,10 +54,6 @@ export default function Roleplay() {
     return data?.items || [];
   }
 
-  async function prepareScenario(id) {
-    return prepareRoleplayScenario(id);
-  }
-
   async function loadAndPrepareScenario(id) {
     if (!id) return;
 
@@ -99,11 +62,9 @@ export default function Roleplay() {
     setScenario(null);
 
     try {
-      const prepared = await prepareScenario(id);
+      const prepared = await prepareRoleplayScenario(id);
 
-      // keep UI label in sync with backend/user
       if (prepared?.targetLanguage) setTargetLanguage(prepared.targetLanguage);
-
       setScenario(prepared?.scenario || null);
     } catch (e) {
       const msg = e?.message || "Failed to load scenario";
@@ -118,24 +79,23 @@ export default function Roleplay() {
     }
   }
 
-  // Initial page protection + load scenario list + prepare first scenario
+  // Initial auth + scenario list
   useEffect(() => {
     if (!isLoggedIn()) {
       navigate("/login");
       return;
     }
 
-  // Load targetLanguage from backend (source of truth). Fallback to localStorage.
-  (async () => {
-    try {
-      const me = await getMe(); // GET /api/me
-      const tl = me?.user?.targetLanguage || "English";
-      setTargetLanguage(tl);
-    } catch {
-      const u = getUser();
-      setTargetLanguage(u?.targetLanguage || "English");
-    }
-  })();
+    // load targetLanguage from backend; fallback to storage
+    (async () => {
+      try {
+        const me = await getMe();
+        setTargetLanguage(me?.user?.targetLanguage || "English");
+      } catch {
+        const u = getUser();
+        setTargetLanguage(u?.targetLanguage || "English");
+      }
+    })();
 
     let cancelled = false;
 
@@ -146,16 +106,11 @@ export default function Roleplay() {
 
         setScenarioList(list);
 
-        // pick first scenario: either first in list, or random
         const firstId = list?.[0]?.id || "";
-        const chosenId = firstId || "";
-        setSelectedScenarioId(chosenId);
+        setSelectedScenarioId(firstId);
 
-        if (chosenId) {
-          await loadAndPrepareScenario(chosenId);
-        } else {
-          setError("No roleplay scenarios available.");
-        }
+        if (firstId) await loadAndPrepareScenario(firstId);
+        else setError("No roleplay scenarios available.");
       } catch (e) {
         if (cancelled) return;
         const msg = e?.message || "Failed to load roleplay scenarios";
@@ -173,7 +128,7 @@ export default function Roleplay() {
     };
   }, [navigate]);
 
-  // When scenario changes OR assistantStarts/provider changes => reset conversation
+  // Reset conversation when scenario/assistantStarts/provider changes
   useEffect(() => {
     if (!scenario) return;
 
@@ -183,7 +138,6 @@ export default function Roleplay() {
       setError("");
       setInput("");
 
-      // Start fresh with only the system prompt coming from backend (already translated + enforced)
       const base = [{ role: "system", content: scenario.systemPrompt }];
 
       if (!assistantStarts) {
@@ -193,21 +147,19 @@ export default function Roleplay() {
 
       setLoading(true);
       try {
-        // Kick off the roleplay with a first assistant message, guaranteed in target language
         const kickoff = [
           ...base,
           {
             role: "user",
-            content: "Start the roleplay now. Begin naturally in character with a short message.",
+            content:
+              "Start the roleplay now. Begin naturally in character with a short message.",
           },
         ];
 
         const data = await sendChat(provider, kickoff);
         const first = (data.reply || "").trim();
 
-        if (!cancelled) {
-          setMessages([...base, { role: "assistant", content: first }]);
-        }
+        if (!cancelled) setMessages([...base, { role: "assistant", content: first }]);
       } catch (e) {
         const msg = e?.message || "Failed to start roleplay";
         if (!cancelled) {
@@ -225,7 +177,10 @@ export default function Roleplay() {
     };
   }, [scenario, assistantStarts, provider]);
 
-  const visibleMessages = useMemo(() => messages.filter((m) => m.role !== "system"), [messages]);
+  const visibleMessages = useMemo(
+    () => messages.filter((m) => m.role !== "system"),
+    [messages]
+  );
 
   async function handleScenarioChange(e) {
     const id = e.target.value;
@@ -236,7 +191,8 @@ export default function Roleplay() {
   async function newScenario() {
     if (!scenarioList?.length) return;
     const candidates = scenarioList.filter((s) => s.id !== selectedScenarioId);
-    const next = (candidates.length ? pickRandom(candidates) : pickRandom(scenarioList)) || null;
+    const next =
+      (candidates.length ? pickRandom(candidates) : pickRandom(scenarioList)) || null;
     if (!next?.id) return;
 
     setSelectedScenarioId(next.id);
@@ -346,173 +302,229 @@ export default function Roleplay() {
 
   const scenarioStub = scenarioList.find((s) => s.id === selectedScenarioId);
 
+  const lastAssistantText =
+    [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
+
   if (!isLoggedIn()) return null;
 
   return (
-    <div style={{ maxWidth: 800 }}>
-      <h1>Roleplay</h1>
-
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <div className="page">
+      <div className="pageHeader">
         <div>
-          Scenario:{" "}
-          <b>{scenario?.title || scenarioStub?.title || (loadingScenario ? "Loading..." : "—")}</b>{" "}
-          <span style={{ opacity: 0.7 }}>({targetLanguage})</span>
+          <h1 className="h1">Roleplay</h1>
+          <p className="sub">
+            Practice realistic situations in <b>{targetLanguage}</b>.
+          </p>
         </div>
 
-        <button type="button" onClick={newScenario} disabled={loading || loadingScenario || !scenarioList.length}>
-          New scenario
-        </button>
-
-        <label>
-          Provider{" "}
-          <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={loading}>
-            <option value="openai">OpenAI</option>
-            <option value="llama3">Llama 3 (local)</option>
-          </select>
-        </label>
-
-        <button
-          type="button"
-          onClick={() => {
-            // Reset current scenario conversation (keep same scenario object)
-            setScenario((prev) => (prev ? { ...prev } : prev));
-          }}
-          disabled={loading || loadingScenario || !scenario}
-        >
-          Reset
-        </button>
-      </div>
-
-      <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <label>
-          Choose scenario{" "}
-          <select
-            value={selectedScenarioId}
-            onChange={handleScenarioChange}
-            disabled={loadingScenario || loading || !scenarioList.length}
+        <div className="row">
+          <button
+            className="btn"
+            type="button"
+            onClick={newScenario}
+            disabled={loading || loadingScenario || !scenarioList.length}
           >
-            {scenarioList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </select>
-        </label>
+            New scenario
+          </button>
 
-        {loadingScenario ? <span style={{ opacity: 0.7 }}>Preparing in {targetLanguage}…</span> : null}
+          <button
+            className="btn-ghost"
+            type="button"
+            onClick={() => setScenario((prev) => (prev ? { ...prev } : prev))}
+            disabled={loading || loadingScenario || !scenario}
+          >
+            Reset
+          </button>
+        </div>
       </div>
 
-      <div style={{ marginTop: 10, opacity: 0.9 }}>
-        <p style={{ margin: "8px 0" }}>{scenario?.description || scenarioStub?.description || ""}</p>
+      {error ? <div className="err" style={{ marginBottom: 10 }}>{error}</div> : null}
+
+      {/* Scenario info card */}
+      <div className="card cardPad" style={{ marginBottom: 12 }}>
+        <div className="scenarioBar">
+          <div className="scenarioLeft">
+            <div className="scenarioTitle">
+              {scenario?.title || scenarioStub?.title || (loadingScenario ? "Loading..." : "—")}
+            </div>
+            <div className="small">({targetLanguage})</div>
+
+            <label className="small">
+              Choose scenario
+              <select
+                className="select"
+                value={selectedScenarioId}
+                onChange={handleScenarioChange}
+                disabled={loadingScenario || loading || !scenarioList.length}
+                style={{ marginLeft: 10, width: 260, maxWidth: "80vw" }}
+              >
+                {scenarioList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="switchRow">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={assistantStarts}
+                onChange={(e) => setAssistantStarts(e.target.checked)}
+                disabled={loadingScenario}
+              />
+              Assistant starts
+            </label>
+
+            {loadingScenario ? (
+              <span className="small">Preparing in {targetLanguage}…</span>
+            ) : null}
+          </div>
+        </div>
+
+        <p className="scenarioDesc">
+          {scenario?.description || scenarioStub?.description || ""}
+        </p>
 
         {scenario?.starterUser ? (
-          <p style={{ margin: "8px 0" }}>
-            Suggested start: <i>{scenario.starterUser}</i>{" "}
+          <div className="row" style={{ marginTop: 10 }}>
+            <span className="small">
+              Suggested start: <i>{scenario.starterUser}</i>
+            </span>
             <button
+              className="btn"
               type="button"
               onClick={() => setInput(scenario.starterUser)}
-              style={{ marginLeft: 8 }}
               disabled={loading || loadingScenario}
             >
               Use
             </button>
-          </p>
+          </div>
         ) : null}
       </div>
 
-      <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <input
-          type="checkbox"
-          checked={assistantStarts}
-          onChange={(e) => setAssistantStarts(e.target.checked)}
-          disabled={loadingScenario}
-        />
-        Assistant starts
-      </label>
-
-      <label>
-        STT{" "}
-        <select
-          value={sttMode}
-          onChange={(e) => setSttMode(e.target.value)}
-          disabled={sttLoading || recording || loadingScenario}
-        >
-          <option value="openai">OpenAI (cloud)</option>
-          <option value="local">Local (whisper.cpp)</option>
-        </select>
-      </label>
-
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-        <label>
-          Voice{" "}
-          <select value={voice} onChange={(e) => setVoice(e.target.value)} disabled={loadingScenario}>
-            <option value="coral">coral</option>
-            <option value="alloy">alloy</option>
-            <option value="nova">nova</option>
-            <option value="onyx">onyx</option>
-            <option value="sage">sage</option>
-            <option value="shimmer">shimmer</option>
-          </select>
-        </label>
-
-        <button type="button" onClick={recording ? stopRecording : startRecording} disabled={sttLoading || loadingScenario}>
-          {sttLoading ? "Transcribing..." : recording ? "Stop recording" : "Start recording"}
-        </button>
-
-        <button
-          type="button"
-          disabled={speaking || loadingScenario}
-          onClick={() => {
-            const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-            speak(lastAssistant?.content || "");
-          }}
-        >
-          {speaking ? "Speaking..." : "Speak last reply"}
-        </button>
-      </div>
-
-      <div
-        style={{
-          marginTop: 12,
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 12,
-          minHeight: 320,
-          maxHeight: 420,
-          overflowY: "auto",
-          background: "#000000",
-        }}
-      >
-        {visibleMessages.length === 0 ? (
-          <p style={{ opacity: 0.7 }}>
-            {loadingScenario
-              ? "Preparing roleplay…"
-              : "Start the conversation (e.g., “Hello! I need…”) or use the suggested start."}
-          </p>
-        ) : (
-          visibleMessages.map((m, i) => (
-            <div key={i} style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 700 }}>{m.role === "user" ? "You" : "Roleplay"}</div>
-              <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+      <div className="chatShell">
+        {/* Conversation */}
+        <div className="chatPanel">
+          <div className="card cardPad">
+            <div className="chatWindow">
+              {visibleMessages.length === 0 ? (
+                <div style={{ color: "rgba(255,255,255,0.70)" }}>
+                  {loadingScenario
+                    ? "Preparing roleplay…"
+                    : "Start the conversation or use the suggested start."}
+                </div>
+              ) : (
+                visibleMessages.map((m, i) => (
+                  <div key={i} className="msg">
+                    <div className="msgMeta">{m.role === "user" ? "You" : "Roleplay"}</div>
+                    <div className={`bubble ${m.role === "user" ? "bubbleUser" : "bubbleAssistant"}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          ))
-        )}
+
+            <form onSubmit={handleSend} className="composer">
+              <input
+                className="input"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Type your message…"
+                disabled={loading || loadingScenario}
+              />
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={loading || loadingScenario || !input.trim() || !scenario}
+              >
+                {loading ? "Sending..." : "Send"}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Side settings */}
+        <div className="chatControls">
+          <div className="card cardPad">
+            <div className="controlGroupTitle">Settings</div>
+
+            <div className="controlRow">
+              <label>
+                Provider
+                <select
+                  className="select"
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="llama3">Llama 3 (local)</option>
+                </select>
+              </label>
+
+              <label>
+                STT
+                <select
+                  className="select"
+                  value={sttMode}
+                  onChange={(e) => setSttMode(e.target.value)}
+                  disabled={sttLoading || recording || loadingScenario}
+                >
+                  <option value="openai">OpenAI (cloud)</option>
+                  <option value="local">Local (whisper.cpp)</option>
+                </select>
+              </label>
+
+              <label>
+                Voice
+                <select
+                  className="select"
+                  value={voice}
+                  onChange={(e) => setVoice(e.target.value)}
+                  disabled={loadingScenario}
+                >
+                  <option value="coral">coral</option>
+                  <option value="alloy">alloy</option>
+                  <option value="nova">nova</option>
+                  <option value="onyx">onyx</option>
+                  <option value="sage">sage</option>
+                  <option value="shimmer">shimmer</option>
+                </select>
+              </label>
+            </div>
+
+            <div style={{ height: 10 }} />
+
+            <div className="quickActions">
+              <button
+                className="btn"
+                type="button"
+                onClick={recording ? stopRecording : startRecording}
+                disabled={sttLoading || loadingScenario}
+              >
+                {sttLoading ? "Transcribing..." : recording ? "Stop recording" : "Start recording"}
+              </button>
+
+              <button
+                className="btn"
+                type="button"
+                disabled={speaking || loadingScenario || !lastAssistantText}
+                onClick={() => speak(lastAssistantText)}
+              >
+                {speaking ? "Speaking..." : "Speak last reply"}
+              </button>
+            </div>
+
+            <div style={{ marginTop: 10, color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
+              Tip: stay in character. If you don’t understand, ask: “Say it another way.”
+            </div>
+          </div>
+        </div>
       </div>
-
-      {error && <p style={{ color: "crimson", marginTop: 10 }}>{error}</p>}
-
-      <form onSubmit={handleSend} style={{ display: "flex", gap: 10, marginTop: 12 }}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message…"
-          style={{ flex: 1, padding: 10 }}
-          disabled={loading || loadingScenario}
-        />
-        <button type="submit" disabled={loading || loadingScenario || !input.trim() || !scenario}>
-          {loading ? "Sending..." : "Send"}
-        </button>
-      </form>
     </div>
   );
 }

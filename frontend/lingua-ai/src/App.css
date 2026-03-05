@@ -714,3 +714,40 @@ select.select option {
 .checkbox input {
   transform: translateY(1px);
 }
+
+/* -----------------------
+   Profile UI
+------------------------ */
+
+.formGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-weight: 850;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.kv {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.kv strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(255,255,255,0.10);
+  margin: 14px 0;
+}
+
+.success {
+  color: #7CFFB2;
+}
