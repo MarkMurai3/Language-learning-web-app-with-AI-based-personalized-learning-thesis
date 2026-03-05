@@ -38,7 +38,6 @@ function parseStoryJson(text) {
       : [];
     return { story, options: opts.slice(0, 3) };
   } catch {
-    // fallback: treat it as plain story text
     return { story: text, options: [] };
   }
 }
@@ -98,8 +97,8 @@ export default function Story() {
 
       const data = await sendChat(provider, kickoff);
       const raw = (data.reply || "").trim();
-
       const parsed = parseStoryJson(raw);
+
       setMessages([system, { role: "assistant", content: parsed.story || raw }]);
       setOptions(parsed.options || []);
     } catch (err) {
@@ -134,10 +133,7 @@ export default function Story() {
       const raw = (data.reply || "").trim();
       const parsed = parseStoryJson(raw);
 
-      setMessages([
-        ...nextMessages,
-        { role: "assistant", content: parsed.story || raw },
-      ]);
+      setMessages([...nextMessages, { role: "assistant", content: parsed.story || raw }]);
       setOptions(parsed.options || []);
     } catch (err) {
       const msg = err.message || "Failed to continue story";
@@ -152,10 +148,32 @@ export default function Story() {
     }
   }
 
+  async function chooseOption(opt) {
+    setError("");
+    setLoading(true);
+    try {
+      const nextMessages = [...messages, { role: "user", content: opt }];
+      const data = await sendChat(provider, nextMessages);
+      const raw = (data.reply || "").trim();
+      const parsed = parseStoryJson(raw);
+
+      setMessages([...nextMessages, { role: "assistant", content: parsed.story || raw }]);
+      setOptions(parsed.options || []);
+    } catch (err) {
+      const msg = err.message || "Failed";
+      if (String(msg).toLowerCase().includes("token")) {
+        clearAuth();
+        navigate("/login");
+        return;
+      }
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function speakLast() {
-    const lastAssistant = [...messages]
-      .reverse()
-      .find((m) => m.role === "assistant");
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
     const text = lastAssistant?.content || "";
     if (!text) return;
 
@@ -174,132 +192,119 @@ export default function Story() {
     }
   }
 
-  return (
-    <div style={{ maxWidth: 800 }}>
-      <h1>Story mode</h1>
+  const hasStory = visibleMessages.length > 0;
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ opacity: 0.8 }}>
-          Target: <b>{targetLanguage}</b>
+  return (
+    <div className="page">
+      <div className="pageHeader">
+        <div>
+          <h1 className="h1">Story</h1>
+          <p className="sub">
+            Choose what happens next. The story stays in your target language:{" "}
+            <b>{targetLanguage}</b>
+          </p>
         </div>
 
-        <label>
-          Provider{" "}
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value)}
-            disabled={loading}
-          >
-            <option value="openai">OpenAI</option>
-            <option value="llama3">Llama 3 (local)</option>
-          </select>
-        </label>
+        <div className="storyHeaderRight">
+          <button className="btn btn-primary" type="button" onClick={startNewStory} disabled={loading}>
+            {hasStory ? "Start new story" : "Start story"}
+          </button>
 
-        <label>
-          Voice{" "}
-          <select
-            value={voice}
-            onChange={(e) => setVoice(e.target.value)}
-            disabled={loading}
-          >
-            <option value="coral">coral</option>
-            <option value="alloy">alloy</option>
-            <option value="nova">nova</option>
-            <option value="onyx">onyx</option>
-            <option value="sage">sage</option>
-            <option value="shimmer">shimmer</option>
-          </select>
-        </label>
+          <button className="btn" type="button" onClick={continueStory} disabled={loading || !hasStory}>
+            Continue
+          </button>
 
-        <button type="button" onClick={startNewStory} disabled={loading}>
-          {visibleMessages.length ? "Start new story" : "Start story"}
-        </button>
-
-        <button
-          type="button"
-          onClick={continueStory}
-          disabled={loading || !visibleMessages.length}
-        >
-          Continue
-        </button>
-
-        <button
-          type="button"
-          onClick={speakLast}
-          disabled={speaking || !visibleMessages.length}
-        >
-          {speaking ? "Speaking..." : "Speak last"}
-        </button>
+          <button className="btn" type="button" onClick={speakLast} disabled={speaking || !hasStory}>
+            {speaking ? "Speaking..." : "Speak last"}
+          </button>
+        </div>
       </div>
 
-      <div
-        style={{
-          marginTop: 12,
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 12,
-          minHeight: 320,
-          maxHeight: 420,
-          overflowY: "auto",
-          background: "#000000",
-        }}
-      >
-        {visibleMessages.length === 0 ? (
-          <p style={{ opacity: 0.7 }}>Click “Start story”.</p>
-        ) : (
-          visibleMessages.map((m, i) => (
-            <div key={i} style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 700 }}>
-                {m.role === "user" ? "You" : "Story"}
-              </div>
-              <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+      {error ? <div className="err" style={{ marginBottom: 10 }}>{error}</div> : null}
+
+      <div className="chatShell">
+        {/* Story window */}
+        <div className="chatPanel">
+          <div className="card cardPad">
+            <div className="chatWindow">
+              {!hasStory ? (
+                <div style={{ color: "rgba(255,255,255,0.70)" }}>
+                  Click <b>Start story</b> to begin.
+                </div>
+              ) : (
+                visibleMessages.map((m, i) => (
+                  <div key={i} className="msg">
+                    <div className="msgMeta">{m.role === "user" ? "You" : "Story"}</div>
+                    <div className={`bubble ${m.role === "user" ? "bubbleUser" : "bubbleAssistant"}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          ))
-        )}
 
-        {/* 3 choice buttons */}
-        {options.length === 3 && (
-          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            {options.map((opt, idx) => (
-              <button
-                key={idx}
-                type="button"
-                disabled={loading}
-                onClick={async () => {
-                  setError("");
-                  setLoading(true);
-                  try {
-                    const nextMessages = [...messages, { role: "user", content: opt }];
-                    const data = await sendChat(provider, nextMessages);
-                    const raw = (data.reply || "").trim();
-                    const parsed = parseStoryJson(raw);
-
-                    setMessages([
-                      ...nextMessages,
-                      { role: "assistant", content: parsed.story || raw },
-                    ]);
-                    setOptions(parsed.options || []);
-                  } catch (err) {
-                    const msg = err.message || "Failed";
-                    if (String(msg).toLowerCase().includes("token")) {
-                      clearAuth();
-                      navigate("/login");
-                      return;
-                    }
-                    setError(msg);
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-              >
-                {opt}
-              </button>
-            ))}
+            {/* 3 choice buttons */}
+            {options.length === 3 ? (
+              <div className="storyOptions">
+                {options.map((opt, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="optionBtn"
+                    disabled={loading}
+                    onClick={() => chooseOption(opt)}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-        )}
-      </div>
+        </div>
 
-      {error && <p style={{ color: "crimson", marginTop: 10 }}>{error}</p>}
+        {/* Side settings */}
+        <div className="chatControls">
+          <div className="card cardPad">
+            <div className="controlGroupTitle">Settings</div>
+
+            <div className="controlRow">
+              <label>
+                Provider
+                <select
+                  className="select"
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="llama3">Llama 3 (local)</option>
+                </select>
+              </label>
+
+              <label>
+                Voice
+                <select
+                  className="select"
+                  value={voice}
+                  onChange={(e) => setVoice(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="coral">coral</option>
+                  <option value="alloy">alloy</option>
+                  <option value="nova">nova</option>
+                  <option value="onyx">onyx</option>
+                  <option value="sage">sage</option>
+                  <option value="shimmer">shimmer</option>
+                </select>
+              </label>
+            </div>
+
+            <div style={{ marginTop: 10, color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
+              Tip: use the options for “easy mode”. Use <b>Continue</b> for free progression.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

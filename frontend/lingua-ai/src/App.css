@@ -626,3 +626,91 @@ select.select option {
   background: #0b1020;
   color: white;
 }
+
+/* -----------------------
+   Story UI
+------------------------ */
+
+.storyOptions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.optionBtn {
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.optionBtn:hover {
+  background: rgba(255,255,255,0.10);
+}
+
+.optionBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.storyHeaderRight {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* -----------------------
+   Roleplay UI
+------------------------ */
+
+.scenarioBar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scenarioLeft {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.scenarioTitle {
+  font-weight: 850;
+}
+
+.scenarioDesc {
+  color: var(--muted);
+  margin: 8px 0 0 0;
+}
+
+.small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.switchRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.checkbox {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.checkbox input {
+  transform: translateY(1px);
+}
