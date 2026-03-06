@@ -24,14 +24,13 @@ try {
 // query translation cache
 const queryTranslateCache = new Map(); // key: `${targetLanguage}::${text}`
 
-// ✅ recommendations cache (final list)
+// recommendations cache (final list)
 const recCache = new Map();
 // key: `${userId}::${targetLanguage}::${stableKey({ interests, prefs })}`
 // value: { expiresAt, items }
 const REC_TTL_MS = 1000 * 60 * 20; // 20 min
 
 function stableKey(obj) {
-  // simple stable stringify by sorting top-level keys
   return JSON.stringify(obj, Object.keys(obj).sort());
 }
 
@@ -129,17 +128,31 @@ function buildQueriesFromInterests(interests, targetLanguageName) {
   return { nativeQueries, learningQueries, hints };
 }
 
+function shuffleArray(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 async function isBlockedForUser(videoId, userId) {
-  // Make admin.service usage consistent everywhere
   try {
     return await isBlocked({ videoId: String(videoId), userId });
   } catch {
-    // if admin.service throws, fail open (do not block)
+    // fail open if admin.service throws
     return false;
   }
 }
 
-async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet, userId }) {
+async function collectIdsFromQueries({
+  apiKey,
+  queries,
+  targetYt,
+  dislikedSet,
+  userId,
+}) {
   const ids = [];
 
   for (const q of queries) {
@@ -147,6 +160,7 @@ async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet, u
       apiKey,
       q,
       relevanceLanguage: targetYt,
+      hl: targetYt,
       maxResults: 12,
     });
 
@@ -165,7 +179,14 @@ async function collectIdsFromQueries({ apiKey, queries, targetYt, dislikedSet, u
   return ids;
 }
 
-async function collectIdsFromSeedChannels({ apiKey, seeds, q, targetYt, dislikedSet, userId }) {
+async function collectIdsFromSeedChannels({
+  apiKey,
+  seeds,
+  q,
+  targetYt,
+  dislikedSet,
+  userId,
+}) {
   const ids = [];
 
   for (const s of (seeds || []).slice(0, 5)) {
@@ -173,6 +194,7 @@ async function collectIdsFromSeedChannels({ apiKey, seeds, q, targetYt, disliked
       apiKey,
       q: q || "",
       relevanceLanguage: targetYt,
+      hl: targetYt,
       maxResults: 5,
       channelId: s.channelId,
     });
@@ -206,7 +228,7 @@ async function buildRecommendations(jwtUser) {
   const targetLanguage = profile?.targetLanguage || "English";
   const { yt: targetYt, franc: targetFranc } = getLangCodes(targetLanguage);
 
-  // ✅ CACHE HIT (right after interests/prefs/profile/targetLanguage known)
+  // cache hit
   const cacheKey = `${jwtUser.userId}::${targetLanguage}::${stableKey({
     interests,
     prefs,
@@ -234,7 +256,7 @@ async function buildRecommendations(jwtUser) {
   let likedChannelIds = new Set();
   if (likedSet.size > 0) {
     try {
-      const likedIds = Array.from(likedSet).slice(0, 25); // limit cost
+      const likedIds = Array.from(likedSet).slice(0, 25);
       const likedDetails = await ytVideosDetails({ apiKey, ids: likedIds });
       for (const v of likedDetails) {
         const chId = v?.snippet?.channelId;
@@ -251,19 +273,27 @@ async function buildRecommendations(jwtUser) {
     targetLanguage
   );
 
-  // Translate native queries into target language to bias results toward native content
+  // translate native queries into target language
   const translatedNativeQueries = [];
   for (const q of nativeQueries.slice(0, 12)) {
-    // cap to control cost
     try {
-      translatedNativeQueries.push(await translateQueryCached(q, targetLanguage));
+      translatedNativeQueries.push(
+        await translateQueryCached(q, targetLanguage)
+      );
     } catch {
-      translatedNativeQueries.push(q); // fallback
+      translatedNativeQueries.push(q);
     }
   }
 
   // first keyword for seed search
-  const firstKeyword = extractKeywordsFromInterestId(interests?.[0]?.id)?.[0] || "";
+  let firstKeyword =
+    extractKeywordsFromInterestId(interests?.[0]?.id)?.[0] || "";
+
+  try {
+    if (firstKeyword) {
+      firstKeyword = await translateQueryCached(firstKeyword, targetLanguage);
+    }
+  } catch {}
 
   // seed lane
   const seeds = await getSeedChannelsForLanguage({
@@ -355,12 +385,10 @@ async function buildRecommendations(jwtUser) {
 
     const isLearning = containsAny(`${title}\n${description}`, hints.learnStop);
 
-    // hard filter learning content if preference says so
     if (prefs?.avoidLearningContent && isLearning) continue;
 
     let score = isLearning ? 0 : 10;
 
-    // boost if user liked this channel before
     const chId = sn.channelId ? String(sn.channelId) : "";
     if (chId && likedChannelIds.has(chId)) score += 5;
 
@@ -376,10 +404,15 @@ async function buildRecommendations(jwtUser) {
     });
   }
 
+  // keep better items preferred
   out.sort((a, b) => (b._score || 0) - (a._score || 0));
 
-  // ✅ CACHE SET right before returning
-  const finalItems = out.slice(0, 20).map(({ _score, ...rest }) => rest);
+  const topPool = out.slice(0, 50);
+  const mixed = shuffleArray(topPool);
+
+  const finalItems = mixed.slice(0, 40).map(({ _score, ...rest }) => rest);
+
+  // cache set
   recCache.set(cacheKey, {
     expiresAt: Date.now() + REC_TTL_MS,
     items: finalItems,

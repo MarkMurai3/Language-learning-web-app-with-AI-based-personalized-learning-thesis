@@ -138,7 +138,7 @@ export default function Home() {
         </div>
 
         <div className="row">
-          {me?.email ? <span className="pill">{me.email}</span> : null}
+          {/* {me?.email ? <span className="pill">{me.email}</span> : null} */}
           <button className="btn" type="button" onClick={() => navigate("/interests")}>
             Edit interests
           </button>
@@ -211,7 +211,7 @@ export default function Home() {
 
       {listToShow.length === 0 ? (
         <div className="card cardPad" style={{ color: "rgba(255,255,255,0.75)" }}>
-          {searchResults !== null ? "No search results." : "No recommendations yet."}
+          {searchResults !== null ? "No search results." : "Looking for content..."}
         </div>
       ) : (
         <div className="grid">
